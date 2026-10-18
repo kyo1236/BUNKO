@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="referrer" content="no-referrer">
+<!-- ホーム画面に据えた時だけ全画面で開くための札。一度「Safari の下に帯が残る」で
+     撤去したが、真犯人は 100dvh の再計算の癖 (文書スクロール化で解決済み) だった
+     可能性が高く、再挑戦 (2026-08-19)。据える時は QR の URL (?k=…&keep=1) のまま
+     追加すること — 剥がした URL を据えると合言葉が残らない -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="文匣">
+<meta name="format-detection" content="telephone=no">
+<!-- 顔は合言葉の前に配る (lan-server.js の ICON)。iOS はホーム画面に据える時、
+     この絵だけを札の届かない別の口で取りに来るため -->
+<link rel="apple-touch-icon" href="/icon.png">
+<title>文匣</title>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/reader.css">
+</head>
+<body>
+<!-- 骨組みだけ。中身は shelf.js (#shelf/#drum/#sheet) と read.js (#reader/#coach) が組む -->
+<div id="shelf"></div>
+<div id="drum" hidden></div>
+<div id="sheet" hidden></div>
+<div id="reader" hidden></div>
+<div id="coach" hidden></div>
+<script src="/shelf.js"></script>
+<script src="/read.js"></script>
+</body>
+</html>

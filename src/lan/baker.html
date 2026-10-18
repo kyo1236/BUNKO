@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' file:; worker-src blob:; img-src blob: data:; connect-src blob: data:">
+<title>baker</title>
+</head>
+<body>
+<!-- 端末に配る頁を焼くための隠し窓。ここは母艦側でだけ動く (中身は端末へ配らない)。
+     pdf.js を Chromium の中で回し、canvas から webp / jpeg を吐く。
+     やり取りは executeJavaScript の戻り値なので、画素は base64 の文字列にして渡す -->
+<script src="../../node_modules/pdfjs-dist/build/pdf.min.js"></script>
+<script src="native-width.js"></script>
+<script>
+'use strict';
+(function () {
+  var lib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+  // 開いておく PDF は 1 冊だけ。本体を丸ごと抱えるので (数十 MB)、
+  // 別の本を頼まれたら前の本は手放す。読んでいる本は 1 冊しかない
+  var doc = null;
+  var docFile = '';
+
+  // 原寸で焼くとき (width が 0) の上限と、絵が見つからない頁 (文字だけ) の幅。
+  // 上限は母艦の画面 (3840) を越える絵を描いても表示で縮むだけなので、canvas を膨らませない
+  var NATIVE_MAX = 4096;
+  var NATIVE_FALLBACK = 2160;
+
+  // 頁に貼られた絵の幅。描画命令を先に組ませると絵は復号されて page.objs に載る
+  // (render はその復号を使い回すので、二度手間にはならない)
+  function nativeWidth(page) {
+    return page.getOperatorList().then(function (ops) {
+      var lookup = function (name) {
+        try {
+          return page.objs.has(name) ? page.objs.get(name) : null;
+        } catch (error) {
+          return null;
+        }
+      };
+      return window.nativeWidth.pick(lib.OPS, ops.fnArray, ops.argsArray, lookup);
+    });
+  }
+
+  window.boot = function () {
+    var bytes = window.host.workerBytes();
+    lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(
+      new Blob([bytes], { type: 'text/javascript' })
+    );
+    return true;
+  };
+
+  function closeDoc() {
+    var old = doc;
+    doc = null;
+    docFile = '';
+    if (!old) return Promise.resolve();
+    return old.destroy().catch(function () { /* 既に畳んでいる */ });
+  }
+
+  function openDoc(file) {
+    if (doc && docFile === file) return Promise.resolve(doc);
+    return closeDoc().then(function () {
+      var bytes = window.host.fileBytes(file);
+      // isEvalSupported: 束の中の指示で eval を回させない
+      return lib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+    }).then(function (next) {
+      doc = next;
+      docFile = file;
+      return next;
+    });
+  }
+
+  function toBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var text = String(reader.result);
+        resolve(text.slice(text.indexOf(',') + 1));
+      };
+      reader.onerror = function () { reject(new Error('読めません')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function fromBase64(text) {
+    var raw = atob(text);
+    var bytes = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+
+  function encode(canvas, type, quality) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          reject(new Error('焼けません'));
+          return;
+        }
+        resolve(blob);
+      }, type, quality);
+    }).then(toBase64);
+  }
+
+  // 端末の画面に合う幅へ落として焼く。縦横のどちらが長い頁でも幅で揃える:
+  // 横長の見開き頁は画面の幅に合わせて出るので、幅さえ足りていれば粗くならない。
+  // width が 0 なら原寸: 頁に貼られた絵の幅で描く (母艦の読書用。縮めてから画面で
+  // 伸ばすと線がにじむ)。頁の寸法は 72dpi のポイント値なので scale 1 では原寸にならない
+  window.bake = function (file, index, width, type, quality) {
+    return openDoc(file).then(function (open) {
+      return open.getPage(index + 1);
+    }).then(function (page) {
+      var sized = width > 0
+        ? Promise.resolve(width)
+        : nativeWidth(page).then(function (found) {
+          return Math.min(NATIVE_MAX, found || NATIVE_FALLBACK);
+        });
+      return sized.then(function (target) {
+        return { page: page, width: target };
+      });
+    }).then(function (job) {
+      var page = job.page;
+      var base = page.getViewport({ scale: 1 });
+      var viewport = page.getViewport({ scale: Math.max(0.02, job.width / base.width) });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(viewport.width));
+      canvas.height = Math.max(1, Math.round(viewport.height));
+      return page.render({
+        canvasContext: canvas.getContext('2d'),
+        viewport: viewport,
+        background: '#ffffff',
+      }).promise.then(function () {
+        // 描いた分を頁に溜めさせない。1 頁は一度焼けば円盤に残る
+        page.cleanup();
+        return encode(canvas, type, quality);
+      });
+    });
+  };
+
+  // zip / 画像フォルダの本。原本が画面より大きいときだけ縮める
+  window.fit = function (source, width, type, quality) {
+    var blob = new Blob([fromBase64(source)]);
+    return createImageBitmap(blob).then(function (bitmap) {
+      var scale = Math.min(1, width / bitmap.width);
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      return encode(canvas, type, quality);
+    });
+  };
+
+  // 頁ごとの縦横比。縦送りの枠を先に決めるのに要る (描いてから伸び縮みすると読む場所が飛ぶ)
+  window.shape = function (file) {
+    return openDoc(file).then(function (open) {
+      var ratios = [];
+      var step = function (index) {
+        if (index >= open.numPages) return { pageCount: open.numPages, ratios: ratios };
+        return open.getPage(index + 1).then(function (page) {
+          var size = page.getViewport({ scale: 1 });
+          ratios.push(Math.round((size.width / size.height) * 1000) / 1000);
+          page.cleanup();
+          return step(index + 1);
+        });
+      };
+      return step(0);
+    });
+  };
+
+  window.forget = closeDoc;
+})();
+</script>
+</body>
+</html>

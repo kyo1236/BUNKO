@@ -1,0 +1,392 @@
+:root { --night:#181a1d;--cabinet:#202328;--shelf:#25292e;--card:transparent;--rule:#34383d;--paper:#e8e7e2;--dust:#919398;--ink:#94b9dd;--nail:#e7e7e2;--detail-w:448px; }
+#app { background:var(--night); }.rail { display:flex!important; }.rail-left { flex:none; }.brand-text { white-space:nowrap; }.rail .search { min-width:100px;align-items:center;padding:0 10px;height:39px; }.rail .search input { text-align:left;font-family:var(--font);font-size:13px; }.search:before,.search:after,.chip:after,#hide-owned:after { display:none!important; }.result-info { justify-content:center; }.card.owned { box-shadow:none; }.ui-waterfall .card.owned { box-shadow:none; }
+body[data-ui-theme=navy] { --night:#162331;--cabinet:#1c2d3e;--shelf:#25394b;--rule:#3c4e60;--paper:#eee7d7;--nail:#e5c67a; }
+body[data-ui-theme=light] { --night:#eeeae1;--cabinet:#f8f5ed;--shelf:#e3ded3;--rule:#cfc7b9;--paper:#302d29;--dust:#756e63;--ink:#447a9d;--nail:#674e31; }
+.rail { padding:12px 28px; gap:28px; background:var(--night); border:0; }
+.rail-left { gap:26px; }.brand-mark { width:34px;height:34px;border-radius:10px;background:var(--paper);display:grid;place-items:center;color:var(--night); }.brand-mark svg {display:none}.brand-mark:after{content:'文';font-size:22px;font-family:serif}.brand-text em{display:none}.brand-text strong{font-family:serif;font-size:20px;letter-spacing:.2em}.search{border:1px solid var(--rule);border-radius:9px;background:var(--cabinet);max-width:560px;flex:1}.rail-actions{margin-left:auto}.rail-sep{display:none}
+.ui-sources,.ui-periods,.ui-views,.ui-ranks { display:flex;align-items:center;gap:3px;position:relative;isolation:isolate;flex-shrink:0; }
+.ui-sources,.ui-periods {padding:4px;background:var(--cabinet);border-radius:12px}
+.ui-sources button,.ui-periods button,.ui-views button,.ui-ranks button {border:0;background:none;color:var(--dust);padding:7px 10px;font:inherit;font-size:12px;white-space:nowrap;border-radius:9px}
+.ui-sources button[aria-pressed=true],.ui-periods button[aria-pressed=true],.ui-views button[aria-pressed=true],.ui-ranks button[aria-pressed=true]{color:var(--paper);background:var(--shelf)}
+.has-fluid button[aria-pressed=true]{background:transparent}.ui-fluid{position:absolute;z-index:-1;pointer-events:none;background:var(--shelf);border-radius:9px;transform-origin:left center;box-shadow:0 1px 4px #0002}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 28px;border:0;background:var(--night)}.chips{flex:none;gap:3px}.chip{border:0;border-radius:7px;font-size:12px;padding:6px 9px}.chip.active{background:var(--shelf);color:var(--paper);box-shadow:none}.chip-discover{display:none}.filter-tail{display:flex;align-items:center;gap:7px;flex:none;margin:0}.result-info{flex:1;text-align:center;margin:0;min-width:70px;max-width:none;font-size:12px;color:var(--dust)}.result-info .interpreted{display:none}.recents{flex-basis:100%}.recents:empty{display:none}.ui-ranks{flex-basis:100%;border-top:1px solid var(--rule);padding-top:6px}.ui-pixiv-filters{display:flex}.ui-pixiv-filters button{border:0;background:none;color:var(--dust);padding:5px 9px;font-size:12px}.ui-pixiv-filters button[aria-pressed=true]{color:var(--paper)}
+.ui-sort-trigger{display:flex;align-items:center;gap:7px;background:none;border:0;color:var(--paper);font-size:12px;padding:7px;min-width:105px}.ui-sort-trigger svg{width:16px;height:16px}.ui-sort-trigger:disabled{color:var(--dust)}.tail-tools{width:auto;gap:5px}.zoom-ctrl{width:auto}.sort-slot[hidden],#source[hidden],#sort[hidden],.ui-views[hidden],.ui-periods[hidden],.ui-ranks[hidden],.ui-pixiv-filters[hidden]{display:none!important}
+/* 所持作品のスコープで、所持に無いサイトの札 (押すと全体へ戻って移る) */
+.ui-sources button.is-outside{opacity:.42}
+.ui-sources button.is-outside:hover{opacity:.8}
+.ui-popover{position:fixed;z-index:110;width:290px;padding:14px;border:1px solid var(--rule);border-radius:10px;background:var(--cabinet);box-shadow:0 15px 45px #0007;color:var(--paper);font-size:12px}.ui-popover[hidden]{display:none}.ui-popover header{display:flex;justify-content:space-between;align-items:center;gap:12px}.ui-popover h3{font-size:12px;color:var(--dust);margin:0 0 10px}.ui-popover header h3{margin:0}.ui-segments{display:flex;background:var(--night);padding:3px;border-radius:8px}.ui-segments button{border:0;background:none;color:var(--dust);padding:5px;font-size:11px;border-radius:5px}.ui-segments button[aria-pressed=true]{background:var(--shelf);color:var(--paper)}.ui-sort-option{display:flex;justify-content:space-between;width:100%;border:0;background:none;color:var(--paper);padding:10px;border-radius:6px;text-align:left}.ui-sort-option[aria-pressed=true],.ui-sort-option:hover{background:var(--shelf)}.ui-sort-option{padding:9px 10px}.ui-sort-option+.ui-sort-option{margin-top:2px}.ui-display-menu>label{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--rule)}.ui-display-menu input[type=range]{width:125px;accent-color:var(--ink)}.ui-display-menu input[type=checkbox]{accent-color:#3799ee}
+.workspace{padding:10px 28px 55px}.grid{gap:20px}.card{border:0;border-radius:8px;background:none;min-height:0}.cover{border-radius:7px;overflow:hidden}.card-title{font-size:13px;color:var(--paper);font-family:var(--font)}.card-body{padding:8px 0}.card-meta{font-size:11px;color:var(--dust)}.card-pages{display:none}.card.owned{background:none;border:0}.card.is-current .cover{outline:2px solid #8db8e6;outline-offset:3px}.card.is-current{background:none;border:0}.card.owned .card-title,.card.owned .card-artist{color:var(--paper)}.card:hover .cover img{transform:none}.ui-hide-captions .card-body{display:none}.ui-fit .cover img{object-fit:contain}
+.grid.ui-waterfall{display:block;position:relative}.ui-waterfall .card{min-height:0}.ui-waterfall .cover{height:var(--ui-cover-height);aspect-ratio:auto;flex:none}.ui-waterfall .cover img{width:100%;height:100%;object-fit:cover}.ui-waterfall .card-title{min-height:0;max-height:2.8em}.ui-waterfall .card-meta{margin-top:7px}.ui-waterfall .card-body{height:80px}
+body.detail-open .filters{margin-right:0!important}body.detail-open .workspace{margin-right:var(--detail-w)}.detail{top:var(--ui-detail-top,112px);right:16px;width:432px;height:calc(100vh - var(--ui-detail-top,112px) - 12px);border:0;border-radius:13px;background:var(--cabinet);padding:20px 28px 35px;transition:none;text-align:center;box-shadow:0 10px 30px #0002}.detail[hidden]{display:none;transition:none}.detail-cover{width:64%;margin:12px auto 20px;border-radius:8px}.detail h2{font-family:serif;font-size:21px}.detail-actions{justify-content:center;flex-wrap:wrap}.detail-rows{text-align:left;margin-top:24px}.detail .kicker{color:var(--dust)}.detail-actions button{border-radius:6px}.queue{background:var(--cabinet);color:var(--paper);border:1px solid var(--rule);border-radius:12px;top:64px;right:24px;width:390px;max-height:calc(100vh - 90px);box-shadow:0 15px 45px #0006}.queue[hidden]{display:none}body.detail-open #queue{right:24px}
+#hide-owned{border:0!important;box-shadow:none!important;background:none!important;color:var(--dust)}#hide-owned[data-mode=owned]{color:#8bb5e0}#hide-owned[data-mode=dupes]{color:#bbb8a9}#hide-owned svg{overflow:visible;width:21px;height:21px}#hide-owned rect{fill:var(--night);transform-origin:12px 18px;transition:transform 440ms cubic-bezier(.16,1,.3,1),opacity 260ms ease}.fan-back{transform:translateX(-2px) rotate(-18deg)}.fan-front{transform:translateX(2px) rotate(18deg)}#hide-owned[data-mode=owned] .fan-back,#hide-owned[data-mode=owned] .fan-mid{opacity:0;transform:none}#hide-owned[data-mode=owned] .fan-front{transform:none}
+.settings-panel{width:900px;max-width:calc(100vw - 40px);height:650px;max-height:calc(100vh - 40px);background:#25262a;color:#e5e5e9;border:1px solid #46484f;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;color-scheme:dark}.settings-head{padding:17px 20px;background:#25262a;border-color:#393b41}.settings-body{flex:1;min-height:0;display:grid;grid-template-columns:190px minmax(0,1fr)}.settings-tabs{background:#202124;padding:15px;display:flex;flex-direction:column;gap:7px;border:0}.settings-tab{border:0;color:#c4c6ce;border-radius:6px;text-align:left;padding:10px}.settings-tab.active{background:#37393e;color:white}.settings-pane{overflow:auto;padding:20px}.settings-tabpanel{background:#2b2c30;border:1px solid #3b3d42;border-radius:8px;padding:0 16px}.set-row{border-color:#404248;padding:16px 0;color:#e5e5e9}.set-label{font-size:12px;color:#e5e5e9}.set-hint{color:#9a9da6;font-size:11px}.set-acts{display:flex;flex-wrap:wrap;gap:9px}.ui-settings-search{width:100%;background:#191a1d;border:1px solid #3a3c42;border-radius:6px;padding:8px;color:white;font-size:12px}.ui-settings-footer{padding:13px 20px;border-top:1px solid #393b41;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#999ca5}.ui-settings-footer button{background:#348ee0;color:white;border:0;border-radius:6px;padding:8px 22px}.ui-setting-checkbox{width:18px;height:18px;accent-color:#399cff}.ui-original-control{display:none!important}.ui-radio-options{display:flex;flex-wrap:wrap;gap:12px 18px;font-size:12px}.ui-radio-options label,.ui-theme-options label{display:flex;align-items:center;gap:7px}.ui-radio-options input,.ui-theme-options input{accent-color:#399cff}.ui-appearance{padding:15px 0;border-bottom:1px solid #404248}.ui-appearance h3{font-size:13px}.ui-theme-options{display:flex;gap:24px}.set-more{display:block}.settings-pane select{background:#232428;color:#eee;border:1px solid #484a50;border-radius:5px;padding:5px}
+@media(max-width:1050px){.rail{flex-wrap:wrap;gap:10px}.rail-left{gap:12px}.ui-sources button{padding:6px}.brand-text{display:none}.search{min-width:230px}.filters{gap:5px}.ui-periods button{padding:6px}.detail{width:360px;--detail-w:376px}:root{--detail-w:376px}.settings-body{grid-template-columns:160px 1fr}}
+@media(prefers-reduced-motion:reduce){#hide-owned rect{transition:none}.ui-fluid{animation:none}}
+
+/* P6 parity: geometry and typography, rather than the old renderer's defaults. */
+:root{--night:#17191c;--cabinet:#202327;--shelf:#2a2e33;--paper:#f1f1ee;--dust:rgba(241,241,238,.45);--rule:rgba(255,255,255,.09);--mincho:"Yu Mincho","Hiragino Mincho ProN",serif;--mark:#fcbf49;--stamp:#d62828}
+body[data-ui-theme=navy]{--night:#003049;--cabinet:#0b3e5b;--shelf:#144b6a;--paper:#eae2b7;--dust:rgba(234,226,183,.5);--rule:rgba(234,226,183,.14);--nail:#fcbf49}
+body[data-ui-theme=light]{--night:#eae2b7;--cabinet:#f3edd0;--shelf:#ddd3a2;--paper:#003049;--dust:rgba(0,48,73,.5);--rule:rgba(0,48,73,.16);--nail:#f77f00}
+.rail{min-height:64px;padding:0 28px;gap:22px}.rail-left{gap:22px}.brand{gap:12px}.brand-text strong{font-family:var(--mincho);font-size:18px;font-weight:700;letter-spacing:.14em}.brand-mark:after{font-family:var(--mincho);font-size:18px;font-weight:700}
+.rail .search{flex:0 1 460px;max-width:460px;min-width:100px;margin-inline:auto;height:38px;background:var(--cabinet);border:1px solid var(--rule);border-radius:8px}.rail-actions{margin-left:0;gap:6px}.rail-actions .iconbtn,.rail-actions .scope-toggle{height:38px;width:38px;padding:9px;position:relative;border-radius:6px}.rail-actions .scope-toggle:after{display:none}.rail-actions svg{width:20px;height:20px}
+.ui-sources{padding:3px;gap:2px}.ui-sources button{padding:6px 12px;font-size:12.5px;color:color-mix(in srgb,var(--paper) 70%,transparent)}
+.filters{min-height:46px;padding:4px 28px;gap:4px}.chips{gap:2px}.chip,.ui-views button,.ui-ranks button{font-size:12.5px;padding:6px 10px;font-weight:400}.chip.active,.ui-views button[aria-pressed=true]{font-weight:600;background:var(--cabinet)}
+.result-info{font-family:var(--mincho);font-size:14px;font-weight:400;color:color-mix(in srgb,var(--paper) 70%,transparent)}
+.filter-tail{gap:4px}.ui-sort-trigger{font-size:12.5px;padding:0 10px;height:34px;min-width:0;color:color-mix(in srgb,var(--paper) 70%,transparent)}.ui-sort-trigger svg{width:17px;height:17px}.zoom-ctrl .iconbtn,.tail-tools .iconbtn{width:38px;height:38px;padding:9px;border:0}.zoom-ctrl svg{width:20px;height:20px}.zoom-ctrl button:after{display:none}
+.ui-periods{gap:2px;padding:3px}.ui-periods button{padding:5px 9px;font-size:11.5px}
+.workspace{padding:8px 28px 60px}.grid{gap:20px}.grid:not(.is-list) .card{display:flex;flex-direction:column;gap:8px;padding:0;outline:none;border:0;background:none;box-shadow:none;overflow:visible;border-radius:0}.grid:not(.is-list) .card.is-current{outline:none;background:none}.card.is-current .cover{outline:1.5px solid #6ba9e9;outline-offset:3px}.card:focus-visible{outline:none}.card:focus-visible .cover{outline:2px solid #6ba9e9;outline-offset:3px}
+.grid:not(.is-list) .cover{border-radius:6px;box-shadow:none;aspect-ratio:5/7}.grid.ui-waterfall .cover{aspect-ratio:auto}.grid:not(.is-list) .card-body{padding:0;height:58px;display:flex;flex-direction:column;justify-content:space-between;flex:none}.grid:not(.is-list) .card-title{font-family:var(--font);font-weight:500;font-size:12.5px;line-height:1.35;margin:0;min-height:0}.grid:not(.is-list) .card-meta{margin:0;font-family:var(--font);font-size:11.5px;line-height:1.5;color:var(--dust)}.card.owned .card-artist{color:var(--dust)}.ui-hide-captions .grid:not(.is-list) .card-body{display:none}.ui-waterfall .cover img{object-position:top center}.grid:not(.is-list) .card:hover .cover img{filter:brightness(1.03)}
+.owned-mark{left:8px;right:auto;background:var(--stamp);color:white;font-family:var(--font);font-size:10.5px;font-weight:700;border:0;border-radius:4px;padding:3px 5px;line-height:1;letter-spacing:0}.star-mark,.card.owned .star-mark{right:8px;color:#17191c;background:var(--mark);border:0;border-radius:4px;padding:3px 5px;font:700 10.5px/1 var(--font)}
+#queue-count{position:absolute;top:5px;right:4px;min-width:16px;height:16px;padding:0 4px;border:0;border-radius:6px;background:#f77f00;color:#17191c;font:700 10.5px/16px var(--font)}
+.ui-display-menu{width:250px;max-width:calc(100vw - 16px);padding:7px;border-radius:8px;border:1px solid color-mix(in srgb,var(--paper) 18%,transparent);font:12px var(--font)}.ui-display-menu h3{font-size:11px;font-weight:400;margin:0;padding:5px 9px 7px}.ui-display-menu .display-choice{width:100%;display:flex;align-items:center;gap:10px;padding:8px 9px;border:0;border-radius:5px;text-align:left;font:inherit;color:var(--paper);background:none}.ui-display-menu .display-choice[aria-checked=true],.ui-display-menu button:hover{background:var(--shelf)}.ui-display-menu svg{width:17px;height:17px;color:var(--dust)}.ui-display-menu .menu-check{margin-left:auto;color:var(--dust)}.ui-display-menu hr{border:0;border-top:1px solid var(--rule);margin:7px 2px}.ui-display-menu label{padding:7px 9px;margin:0;display:flex;gap:9px;align-items:center;border:0}.ui-display-menu input[type=checkbox]{appearance:auto;width:13px;height:13px;accent-color:#5b9fe7;margin:0;flex:none}.ui-display-menu .size-label{justify-content:space-between;color:var(--dust)}.ui-display-menu input[type=range]{width:calc(100% - 18px);margin:5px 9px 12px;accent-color:#a7aeb7;height:3px}.ui-display-menu .display-reset{display:block;width:100%;padding:7px 9px;border:0;border-radius:5px;color:var(--dust);font:11px var(--font);background:none;text-align:left}
+.detail{width:432px;right:16px;border-radius:16px;padding:14px 28px 30px;box-shadow:0 22px 44px #0008,0 4px 10px #0005}.detail:before{content:'';display:block;width:44px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--paper) 18%,transparent);margin:0 auto 16px}.detail #detail-body{display:flex;flex-direction:column;align-items:center;gap:16px;min-width:0}.detail-cover{width:58%;margin:4px 0 0;border-radius:8px;max-height:none;object-fit:contain}.detail h2{font:600 19px/1.45 var(--mincho);letter-spacing:.01em;max-width:22em;width:100%;padding:0;text-align:center;margin:0;text-wrap:balance}.detail .kicker{font:11.5px var(--font);color:var(--dust);margin:0}.detail-actions{margin:0;gap:8px}.detail-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px 0 11px;border:0;border-radius:6px;background:var(--shelf);color:var(--paper);font:500 13px var(--font)}.detail-actions button.primary{background:var(--nail);color:var(--night);font-weight:700}.detail-actions button svg{width:18px;height:18px}.detail-rows{width:100%;max-width:340px;font:12.5px var(--font);grid-template-columns:4.5em minmax(0,1fr);column-gap:14px;row-gap:9px;margin:4px 0 0;text-align:left}.detail-rows .row-label{text-align:right;color:var(--dust)}.detail-rows .tag{background:transparent;border:0;border-radius:4px;font:12.5px var(--font);padding:1px 3px;color:var(--tag-color,color-mix(in srgb,var(--paper) 70%,transparent))}.detail-rows .tag:hover{background:var(--shelf)}.detail-quiet{width:100%;padding-top:16px;margin:6px 0 0;justify-content:center}.detail-quiet button,.detail-danger button{border-radius:6px;font:12px var(--font);color:var(--dust)}
+#settings{background:#0005}
+.queue{padding:18px}.queue>header{padding:0;margin:0 0 16px;display:flex;align-items:center;gap:14px}.queue h2{font:600 15px var(--font);margin:0 auto 0 0}.queue-tools{gap:6px}.queue-tools .iconbtn{width:28px;height:28px;padding:5px}.queue-tools #clear-finished{width:auto;font:12px var(--font);white-space:nowrap}.ui-queue-empty{color:var(--dust);font-size:12px;margin:20px 0 8px}.queue-tools button:disabled{opacity:.35}.ui-pixiv-filters button:disabled{opacity:1;cursor:default}
+.workspace{transition:none!important}.detail-rows .tag.female:before{content:'♀';font-size:10px;margin-right:3px;color:currentColor}.detail-rows .tag.male:before{content:'♂';font-size:10px;margin-right:3px;color:currentColor}
+.result-info small{font:11px var(--font);color:var(--dust);margin-left:2px}
+@media(max-width:1100px){.rail{gap:12px}.rail-left{gap:12px}.ui-sources button{padding-inline:8px}}
+@media(max-width:900px){.brand-text{display:none}.rail{flex-wrap:wrap;padding-block:10px}.rail .search{flex:1 1 200px}.filters{flex-wrap:wrap}.detail{width:min(432px,calc(100vw - 32px))}}
+@media (max-width:1050px){.detail{width:360px}}
+.ui-sort-trigger{flex:0 0 auto;white-space:nowrap}.ui-sort-trigger svg{flex:none}.filter-tail{width:auto;max-width:none}.tail-tools{flex:0 0 auto}
+
+/* The browsing controls stay in place while the collection scrolls beneath them. */
+#app{display:block}
+.ui-topbar{position:sticky;top:0;z-index:70;background:var(--night);padding-bottom:10px;border-bottom:1px solid var(--rule)}
+html{scroll-padding-top:calc(var(--ui-topbar-height,120px) + 16px)}
+.workspace{padding-top:16px}
+.queue{z-index:90}
+#cancel-all{display:none!important}
+.card-acts [data-act=save],.card-acts [data-act=detail],.card-acts [data-act=open-owned]{display:none!important}
+.grid:not(.is-list) .cover{transition:transform 260ms cubic-bezier(.22,1,.36,1),box-shadow 260ms ease;transform-origin:center}
+.grid:not(.is-list) .cover img{transition:filter 260ms ease}
+.grid:not(.is-list) .card:hover .cover,.grid:not(.is-list) .card:focus-visible .cover{transform:translateY(-2px) scale(1.015);box-shadow:0 5px 18px #0005,0 0 0 1px #ffffff12}
+.grid:not(.is-list) .card:hover .cover img,.grid:not(.is-list) .card:focus-visible .cover img{filter:brightness(1.06);transform:none}
+.detail-danger{width:100%;margin:0;padding:0;border:0}
+.detail-danger .danger-act,.detail-quiet .quiet-act{width:100%;min-height:36px}
+.detail-quiet+.detail-danger{margin-top:-8px}
+@media(prefers-reduced-motion:reduce){.grid:not(.is-list) .cover,.grid:not(.is-list) .cover img{transition:none}}
+
+:root{--detail-w:400px;--owned-blue:#94bddf}
+.detail{width:384px;padding-inline:20px}
+.detail:before{display:none}
+.detail-cover{margin-top:16px;width:64%}
+.detail-rows{align-items:baseline;line-height:1.65}
+.detail-rows dt,.detail-rows dd{margin:0;padding:0;line-height:inherit}
+.detail-rows .row-value .plain{line-height:inherit}
+.detail-actions{gap:7px}
+.detail-actions button{padding-inline:10px;font-size:12px}
+.detail-actions [data-bookmark]{width:34px;padding:0}
+.detail-actions [data-bookmark][aria-pressed=true] svg{fill:currentColor}
+.owned-mark{display:none!important}
+.grid:not(.is-list) .card.owned .card-title{color:var(--owned-blue)}
+.card-acts:has(.px-bm){inset:7px 7px auto auto;width:27px;height:27px}
+.card-acts .px-bm{flex:none;width:27px;height:27px;min-height:0;border:0;border-radius:5px;background:#17191ca6}
+.card-acts .px-bm svg{width:15px;height:15px}
+#hide-owned[data-mode=none]{color:var(--owned-blue)}
+#hide-owned[data-mode=dupes]{color:#799ab7}
+#hide-owned[data-mode=dupes] .fan-mid{opacity:0;transform:none}
+#hide-owned[data-mode=dupes] .fan-back{transform:translateX(-1px) rotate(-8deg)}
+#hide-owned[data-mode=dupes] .fan-front{transform:translateX(1px) rotate(8deg)}
+#hide-owned[data-mode=owned]{color:var(--dust)}
+#queue-count[hidden]{display:none}
+.queue-tools #clear-finished{width:28px;padding:5px}
+.queue-tools #clear-finished svg{width:18px;height:18px}
+body.reader-open .ui-topbar,body.reader-open .detail,body.reader-open .queue,body.reader-open .ui-popover{visibility:hidden;pointer-events:none}
+.detail,.queue{overscroll-behavior:contain}
+#btn-settings svg{transition:transform 220ms cubic-bezier(.2,.8,.2,1)}
+#btn-settings:hover svg{transform:rotate(28deg)}
+#btn-queue:hover svg,.detail-actions [data-save]:hover svg{animation:ui-download-nudge 260ms ease-out}
+.detail-actions [data-read]:hover svg{animation:ui-book-open 260ms cubic-bezier(.2,.8,.2,1)}
+.card-acts .px-bm svg,.detail-actions [data-bookmark] svg{transition:transform 180ms cubic-bezier(.2,.8,.2,1),fill 180ms ease}
+.card-acts .px-bm:hover svg,.detail-actions [data-bookmark]:hover svg{transform:translateY(-2px) rotate(-5deg)}
+#zoom-cycle:hover svg{animation:ui-layout-settle 220ms ease-out}
+@keyframes ui-download-nudge{0%,100%{transform:translateY(0)}45%{transform:translateY(2px)}75%{transform:translateY(-1px)}}
+@keyframes ui-book-open{0%,100%{transform:perspective(70px) rotateY(0)}45%{transform:perspective(70px) rotateY(-18deg)}}
+@keyframes ui-layout-settle{0%,100%{transform:scale(1)}50%{transform:scale(.88)}}
+@media(max-width:1050px){:root{--detail-w:376px}.detail{width:360px}}
+@media(prefers-reduced-motion:reduce){#btn-settings svg,.px-bm svg,.detail-actions [data-bookmark] svg{transition:none}#btn-queue:hover svg,.detail-actions button:hover svg,#zoom-cycle:hover svg{animation:none}}
+
+/* Captions follow their content, as in Eagle; no reserved second title line. */
+.grid:not(.is-list) .card-body{height:auto;justify-content:flex-start;gap:4px;text-align:center}
+.grid:not(.is-list) .card-title{min-height:0;text-align:center}
+.card-heading{min-width:0}
+.grid:not(.is-list) .card-meta{justify-content:center;gap:6px;flex-wrap:wrap}
+.card-pages{display:inline;white-space:nowrap;color:var(--dust)}
+.card-pages:empty,.card-artist:empty{display:none}
+.card-acts{display:none!important}
+.card.is-creator .card-heading{display:flex;align-items:flex-start;justify-content:center;gap:5px}
+.card.is-creator .card-title{flex:0 1 auto;min-width:0}
+.card.is-creator .card-meta,.card.is-creator .folder-mark{display:none!important}
+.creator-actions{display:inline-flex;flex:none;gap:2px}
+.creator-actions .card-act{display:grid;flex:none;width:20px;min-height:20px;border:0;background:none;color:var(--dust);border-radius:5px;opacity:.65}
+.creator-actions .card-act svg{width:14px;height:14px}
+.creator-actions .card-act:hover,.creator-actions .card-act:focus-visible{opacity:1;color:var(--paper);background:var(--shelf)}
+.creator-actions .paw-fav.is-on{color:var(--owned-blue);opacity:.85}
+.detail-danger{border-top:1px solid var(--rule);padding-top:16px;margin-top:20px}
+.detail-quiet+.detail-danger{border:0;padding-top:0;margin-top:-8px}
+/* Reader inherits the selected home theme, with a quieter continuous toolbar. */
+.reader{background:var(--night);color:var(--paper)}
+.reader-bar{background:color-mix(in srgb,var(--night) 86%,#000);border:0;padding:8px 14px;gap:10px}
+.reader-bar button,.reader-bar .rbtn{background:transparent;border:0;border-radius:8px;box-shadow:none;color:var(--dust);transition:color 140ms ease,background 140ms ease}
+.reader-bar .rbtn:hover,.reader-bar .rbtn.active,.reader-bar button:hover{background:color-mix(in srgb,var(--paper) 7%,transparent);color:var(--paper);border:0}
+.reader-bar p{color:var(--dust);font-family:var(--font);font-size:12px}
+.reader-tools{gap:5px}.reader-tools .sep{background:color-mix(in srgb,var(--rule) 55%,transparent);height:15px}
+.reader-page-input{border-radius:6px;background:var(--cabinet);color:var(--paper)}
+@media(prefers-reduced-motion:reduce){.reader-bar button,.reader-bar .rbtn{transition:none}}
+.grid:not(.is-list) .card-artist{flex:0 1 auto;min-width:0}
+.grid:not(.is-list) .card-pages{margin-left:0}
+
+.ui-sort-scope { margin: 4px 12px 12px; color: var(--muted, #9b9da4); font-size: 12px; line-height: 1.6; }
+
+/* Pixiv shelves wrap vertically; each section keeps its own heading. */
+#grid.pixiv-shelves{display:block;height:auto!important}
+.pixiv-shelf{margin:0 0 34px;min-width:0}
+.pixiv-shelf>header{margin-bottom:16px;border-bottom:1px solid var(--border,#363940);padding-bottom:12px}
+.pixiv-shelf h2{font-size:18px;font-weight:600;margin:0 0 5px}
+.pixiv-shelf header p{font-size:12px;opacity:.65;margin:0}
+.pixiv-shelf-books{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--card-min,152px)),1fr));gap:22px 16px}
+.pixiv-shelf-authors{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:18px}
+.pixiv-author-shelf{border:1px solid var(--border,#363940);border-radius:10px;padding:12px;min-width:0}
+.pixiv-author-previews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pixiv-author-previews .card-body{display:none}
+.pixiv-author-profile .card{margin-top:12px;display:flex;align-items:center;gap:12px}
+.pixiv-author-profile .cover{width:46px;height:46px;flex-shrink:0;border-radius:50%}
+.pixiv-author-profile .card-body{flex:1;min-width:0}
+.pixiv-detail-extras{display:grid;gap:12px;margin:16px 0;font-size:13px;min-width:0}
+.pixiv-detail-extras details{border-top:1px solid var(--border,#363940);padding-top:12px}
+.pixiv-detail-extras summary{cursor:pointer;overflow-wrap:anywhere}
+.pixiv-caption p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;max-height:320px;overflow:auto}
+.pixiv-cross-sites{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.pixiv-detail-extras button{padding:8px 12px;border:1px solid var(--border,#363940);border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+.pixiv-detail-extras small{display:block;opacity:.65}
+@media(max-width:700px){.pixiv-shelf-books{gap:16px 8px}.pixiv-shelf-authors{grid-template-columns:1fr}.pixiv-shelf h2{font-size:16px}}
+
+#grid .pixiv-author-previews .card-body{display:none}
+#grid .pixiv-author-profile .card-meta{display:flex!important;justify-content:flex-start}
+#grid .pixiv-author-profile .card{grid-template-columns:46px 1fr}
+#grid .pixiv-author-profile .cover{aspect-ratio:1;width:46px;height:46px}
+#grid .pixiv-author-profile .card-body{text-align:left}
+#grid .pixiv-author-profile .card-pages{display:none}
+
+.pixiv-detail-related{width:100%;border-top:1px solid var(--rule,#8884);margin-top:8px;padding-top:18px;text-align:left}
+.pixiv-detail-related h3{font-size:13px;font-weight:500;margin:0 0 12px;opacity:.75}
+.pixiv-related-list{display:flex;flex-direction:column;gap:12px;font-size:12px}
+.pixiv-related-item{display:flex;align-items:flex-start;gap:12px;text-align:left;width:100%;border:0;border-radius:5px;background:transparent;color:inherit;padding:0;cursor:pointer}
+.pixiv-related-item:hover{background:#8881}
+.pixiv-related-item>img{width:56px;height:78px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.pixiv-related-item>span{display:flex;flex-direction:column;gap:5px;min-width:0;padding-top:2px}
+.pixiv-related-item strong{font-size:13px;font-weight:500;line-height:1.5;overflow-wrap:anywhere}
+.pixiv-related-item span span,.pixiv-related-item small{font-size:11px;opacity:.65;overflow-wrap:anywhere}
+.pixiv-detail-extras{text-align:left;width:100%;box-sizing:border-box}
+.pixiv-caption p{text-align:left;margin:10px 0 0}
+
+.detail .pixiv-detail-extras{max-width:340px;padding-left:70.25px;margin:0;font-size:12.5px}
+.detail .pixiv-detail-extras details{border:0;padding:0}
+
+.pixiv-detail-related>summary{cursor:pointer;font-size:13px;opacity:.8;margin-bottom:18px}
+.pixiv-detail-related:not([open])>summary{margin-bottom:0}
+.pixiv-related-item{flex-direction:column;align-items:center;text-align:center;gap:10px;margin-bottom:20px}
+.pixiv-related-item>img{width:58%;height:auto;aspect-ratio:auto;object-fit:contain;border-radius:8px}
+.pixiv-related-item>span{align-items:center;width:100%}
+.pixiv-caption a{color:var(--nail,#93b9db);text-decoration:underline;text-underline-offset:3px}
+
+.detail .pixiv-detail-extras{padding-left:2.5em}
+
+.pixiv-related-item>img{width:100%;max-height:420px;object-fit:contain}
+.pixiv-related-item .pixiv-related-meta{display:flex;flex-direction:row;align-items:baseline;justify-content:center;gap:8px;width:100%;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pixiv-related-meta small{flex-shrink:0;opacity:1}
+.pixiv-caption p{color:var(--dust,#a0a4ac)}
+.pixiv-caption a{color:#83b6e6;text-decoration-color:#83b6e680}
+.pixiv-caption a:hover{color:#aed4f5}
+.pixiv-related-empty{text-align:center;color:var(--dust,#a0a4ac);margin:12px 0;font-size:12.5px}
+
+.pixiv-related-meta .pixiv-related-author{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:1}
+
+/* Keep the trailing controls aligned even when recommendation counts are hidden. */
+.bunko-refined .filter-tail{margin-left:auto}
+.bunko-refined .pixiv-author-profile .pixiv-creator-card{display:block;margin-top:10px}
+.bunko-refined .pixiv-creator-card .pixiv-creator-row{display:flex;align-items:center;gap:8px;padding:10px 0;min-width:0}
+.bunko-refined .pixiv-creator-row .pixiv-avatar{display:block;width:36px;height:36px;flex:0 0 36px;border-radius:50%;object-fit:cover}
+.bunko-refined .pixiv-creator-row .card-title{flex:1;min-width:0;margin:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bunko-refined .pixiv-creator-row .px-follow{flex:none;margin:0;border:0;border-radius:999px;background:#0096fa;color:#fff;padding:7px 12px;font-size:12px;font-weight:600;white-space:nowrap;line-height:1.2}
+.bunko-refined .pixiv-creator-row .px-follow.is-on{background:#356c95}
+.bunko-refined .pixiv-pinned-creator .pixiv-creator-row{gap:5px;flex-wrap:wrap}
+.bunko-refined .pixiv-pinned-creator .pixiv-avatar{width:28px;height:28px;flex-basis:28px}
+.bunko-refined .pixiv-pinned-creator .px-follow{margin-left:auto}
+.bunko-refined.ui-hide-captions .pixiv-creator-card .card-body{display:flex}
+.bunko-refined #grid .pixiv-creator-card .pixiv-creator-row{flex-direction:row;justify-content:flex-start;height:auto;text-align:left}
+
+/* Author names start beside their avatar; metadata values share one left edge. */
+.bunko-refined #grid .pixiv-creator-row .card-title{text-align:left;flex:0 1 auto}
+.bunko-refined #grid .pixiv-creator-row .px-follow{margin-left:auto}
+.bunko-refined .detail-rows.pixiv-metadata .tag{padding-left:0;padding-right:0}
+.bunko-refined .detail-rows.pixiv-metadata .row-value{column-gap:8px}
+.bunko-refined .detail .pixiv-detail-extras{padding-left:0;margin:0;max-width:340px}
+.bunko-refined .detail .pixiv-caption{border-top:1px solid var(--rule);padding-top:14px;margin-top:2px}
+.bunko-refined .detail .pixiv-caption summary{line-height:1.65}
+.bunko-refined .detail .pixiv-caption p{margin-top:12px}
+
+/* Keep page counts on the image and ratings at the opposite corner. */
+.cover>.star-mark,.card.owned .cover>.star-mark{top:auto;bottom:4px;left:auto;right:4px}
+.pixiv-related-item .page-count-badge,.pixiv-related-item .page-count-badge>span{font-size:11px;opacity:1}
+
+/* ── 2026-09-27 美観の整え ──────────────────────────────────────────────
+   上の段は型 6 の寸法を本体へ寄せた記録で、色は墨の値を直に書いた所が多い。
+   ここでは寸法 (帯・札・詳細の幅と高さ) を一つも動かさずに、
+   (1) 色を主題 (墨・紺・明) の語へ結び直し、(2) 明で沈んでいた字を起こし (対比 4.5:1 以上)、
+   (3) 青黒 + 金の頃の地 (#121821 など) と、面ごとに違っていた青を一つにする。
+   語は body に置く。:root に置くと var(--paper) が墨の値のまま固まり、主題を替えても追わない */
+body{
+  --dust:rgba(241,241,238,.5);
+  --owned-blue:#94bddf;          /* 所持の題 */
+  --select:#6ba9e9;              /* 選んでいる物 (詳細を開いた札・焦点) */
+  --count:#f77f00;               /* 数の札 (ダウンロードの数と進み) */
+  --home-accent:#7fd8dc;         /* Home の結び済みの鎖・最近の動きの +N・顔の札の押された印 */
+  --home-frame:color-mix(in srgb,var(--paper) 90%,transparent);   /* Home の扇の札の縁 (白い縁の写真の札) */
+  --home-fan-shadow:0 8px 18px rgba(0,0,0,.42),0 2px 5px rgba(0,0,0,.3);
+  --scrim:rgba(0,0,0,.45);
+  --hover:color-mix(in srgb,var(--paper) 6%,transparent);
+  --line-strong:color-mix(in srgb,var(--paper) 14%,transparent);
+  --placeholder:color-mix(in srgb,var(--paper) 42%,transparent);
+  --panel-shadow:0 18px 44px rgba(0,0,0,.42),0 3px 10px rgba(0,0,0,.26);
+  --tag-artist:#e3b34c;--tag-group:#d9c27e;--tag-series:#8fb8dd;--tag-character:#4cc9ad;--tag-male:#7fb0e0;--tag-female:#e08aa8;
+  /* プロンプトの重みの記法: 上げる ({x} / 1.3::x:: / (x:1.2)) と 下げる ([x] / -1::x::)。タグの色と被らない二色 */
+  --weight-up:#7fd8dc;--weight-down:#e08aa8;
+  /* 札の「プロンプトあり」の印 (表紙の縁を薄く染める。寸法は動かさない) */
+  --prompt-mark:#5aa0e6;
+}
+body[data-ui-theme=navy]{--dust:rgba(234,226,183,.66);--select:#8cc3f0;--scrim:rgba(0,14,24,.5);--placeholder:color-mix(in srgb,var(--paper) 55%,transparent);--home-frame:var(--paper)}
+body[data-ui-theme=light]{
+  --dust:rgba(0,48,73,.7);--ink:#2a5f86;--owned-blue:#1f5d8a;--select:#1f6fb2;--home-accent:#127a80;
+  --scrim:rgba(0,48,73,.2);--panel-shadow:0 18px 40px rgba(0,48,73,.16),0 3px 8px rgba(0,48,73,.1);--placeholder:color-mix(in srgb,var(--paper) 62%,transparent);
+  --home-frame:var(--cabinet);--home-fan-shadow:0 8px 18px rgba(0,48,73,.2),0 2px 5px rgba(0,48,73,.12);
+  --tag-artist:#82540a;--tag-group:#6f5a1a;--tag-series:#245b87;--tag-character:#0f6b58;--tag-male:#2b5f99;--tag-female:#a3325e;
+  --weight-up:#127a80;--weight-down:#a3325e;--prompt-mark:#1f6fb2;
+}
+
+/* 字間: 日本語の UI の字は一つの間で揃える (チップ .06em・検索 .06em・控え室の見出し .12em が混ざっていた) */
+.chip,.ui-sources button,.ui-views button,.ui-periods button,.ui-ranks button,.ui-sort-trigger,.rail .search input,.queue,.queue h2,.loupe-caption{letter-spacing:.02em}
+.search input::placeholder,.rail .search input::placeholder{color:var(--placeholder);letter-spacing:.02em}
+
+/* 選択と焦点は一つの青で (主題ごとに濃さだけ変える) */
+.card.is-current .cover{outline-color:var(--select)}
+.card:focus-visible .cover{outline-color:var(--select)}
+#hide-owned[data-mode=none]{color:var(--owned-blue)}
+#hide-owned[data-mode=dupes]{color:color-mix(in srgb,var(--owned-blue) 70%,var(--dust))}
+.ghost.active,.iconbtn.active{background:color-mix(in srgb,var(--nail) 10%,transparent)}
+
+/* リスト表示: 表紙の小窓と字の間に息を置き、所持は升目と同じく題の色で言う。
+   行の高さは札ごとに揃う (表紙 76px + 上下 6px) ので、仮想化の測り直しは揺れない */
+.grid.is-list{gap:2px}
+.grid.is-list .card{gap:16px;align-items:center;padding:6px 12px 6px 6px;border:0;border-radius:8px;outline:none;background:none;box-shadow:none;min-height:0;transition:background-color 140ms ease}
+.grid.is-list .card:hover{background:var(--hover)}
+.grid.is-list .card.owned{outline:none}
+.grid.is-list .card.owned .card-title{color:var(--owned-blue)}
+.grid.is-list .card.owned .card-artist{color:var(--dust)}
+.grid.is-list .card.is-current,.grid.is-list .card.owned.is-current{outline:none;border:0;background:var(--cabinet);box-shadow:inset 2px 0 0 var(--select)}
+.grid.is-list .card:focus-visible{outline:none;background:var(--hover)}
+.grid.is-list .cover{border-radius:5px;overflow:hidden}
+/* 小窓の上の札は、版違いの一覧 (.variant-cover) と同じ小ささに */
+.grid.is-list .page-count-badge{top:2px;right:2px;padding:2px 3px;gap:1px;font-size:10px}
+.grid.is-list .page-count-badge svg{width:10px;height:10px}
+.grid.is-list .cover>.star-mark{bottom:2px;right:2px;padding:2px 3px;font-size:9.5px}
+.grid.is-list .card-body{padding:0;gap:4px;min-width:0;flex:1;text-align:left}
+.grid.is-list .card-title{font-family:var(--font);font-size:13px;font-weight:500;line-height:1.45;margin:0;color:var(--paper)}
+.grid.is-list .card-meta{margin:0;display:flex;gap:10px;align-items:baseline;font-size:11.5px;color:var(--dust)}
+.grid.is-list .card-pages{display:inline;color:var(--dust)}
+@media(prefers-reduced-motion:reduce){.grid.is-list .card{transition:none}}
+
+/* 検索結果候補: 青黒の地を今の面へ。種類の色の線 (左端) と送る値の等幅はそのまま */
+.suggest{background:var(--cabinet);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--panel-shadow);padding:6px}
+.suggest button{border-radius:6px;padding:8px 10px}
+.suggest button:hover,.suggest button.active{background:var(--shelf)}
+.suggest button:hover .label,.suggest button.active .label{color:var(--paper)}
+.suggest .count{font-family:var(--font);font-size:11.5px}
+.suggest button[data-kind="artist"]{--suggest-kind:var(--tag-artist)}
+.suggest button[data-kind="group"]{--suggest-kind:var(--tag-group)}
+.suggest button[data-kind="series"]{--suggest-kind:var(--tag-series)}
+.suggest button[data-kind="character"]{--suggest-kind:var(--tag-character)}
+.suggest button[data-kind="male"]{--suggest-kind:var(--tag-male)}
+.suggest button[data-kind="female"]{--suggest-kind:var(--tag-female)}
+.suggest button[data-kind="either"] .suggest-bar{background:linear-gradient(var(--tag-male) 0 50%,var(--tag-female) 50% 100%)}
+
+/* 詳細のタグ: 色は主題の語から (明では濃い版で 4.5:1 を保つ) */
+.tag.artist{--tag-color:var(--tag-artist);border-color:color-mix(in srgb,var(--tag-artist) 45%,transparent)}
+.tag.group{--tag-color:var(--tag-group);border-color:color-mix(in srgb,var(--tag-group) 40%,transparent)}
+.tag.series{--tag-color:var(--tag-series);border-color:color-mix(in srgb,var(--tag-series) 40%,transparent)}
+.tag.character{--tag-color:var(--tag-character);border-color:color-mix(in srgb,var(--tag-character) 40%,transparent)}
+.tag.male{--tag-color:var(--tag-male);border-color:color-mix(in srgb,var(--tag-male) 40%,transparent)}
+.tag.female{--tag-color:var(--tag-female);border-color:color-mix(in srgb,var(--tag-female) 40%,transparent)}
+/* 行の名は地の文の書体で (等幅だと pixiv・Pawchive だけが別の顔に見えた) */
+.detail-rows .row-label{font-family:var(--font);letter-spacing:.02em}
+.detail-cover{background:var(--shelf)}
+.detail{box-shadow:var(--panel-shadow)}
+
+/* 中身を覗く小窓: 金の枠と青黒の地をやめ、詳細と同じ面・同じ角に */
+.loupe{background:var(--cabinet);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--panel-shadow);padding:8px}
+.loupe-pages{background:var(--night);border-radius:7px}
+.loupe-caption{margin:10px 6px 2px;font-size:12.5px;line-height:1.5}
+.loupe-caption small{font-family:var(--font);font-size:11.5px;font-variant-numeric:tabular-nums;margin-top:2px}
+
+/* 小窓と板の影は主題の語で (明に黒い影は重い) */
+.ui-popover,.queue{box-shadow:var(--panel-shadow)}
+.ui-popover{border-color:var(--line-strong)}
+#settings{background:var(--scrim)}
+.confirm{background:var(--scrim)}
+.link-query{background:var(--night)}
+
+/* ダウンロードの進み: 翡翠をやめ、数の札と同じ橙で (済は --nail、失敗は朱のまま) */
+.bar,.set-bar{background:var(--shelf);border-radius:2px;overflow:hidden}
+.bar>span,.set-bar>span{background:var(--count)}
+.job.done .bar>span{background:var(--nail)}
+.job.error .bar>span{background:var(--stamp)}
+.dl-strip{background:color-mix(in srgb,var(--night) 70%,transparent)}
+.dl-strip i{background:var(--count)}
+
+/* pixiv の二つの絞り (種類・対象): 値だけだと「すべて すべて」と並んで何の絞りか分からない */
+.ui-pixiv-filters{gap:2px}
+.ui-pixiv-filters button{display:inline-flex;align-items:baseline;gap:5px;border-radius:7px;padding:6px 9px;letter-spacing:.02em}
+.ui-pixiv-filters button:hover:not(:disabled){background:var(--hover);color:var(--paper)}
+.ui-pixiv-filters .ui-key{font-size:11px;color:var(--dust)}
+.ui-pixiv-filters button[aria-pressed=true]{color:var(--paper);background:var(--cabinet)}
+/* 900px 以下では道具の行が二段に落ちる境目に当たるので、名札は畳む (読み上げは aria-label が言う) */
+@media(max-width:900px){.ui-pixiv-filters .ui-key{display:none}}
+
+/* pixiv の棚と詳細の線: 未定義の --border (灰の直書きへ落ちていた) を主題の罫へ */
+.pixiv-shelf>header,.pixiv-author-shelf,.pixiv-detail-extras details,.pixiv-detail-extras button{border-color:var(--rule)}
+.pixiv-related-item:hover{background:var(--hover)}
+.pixiv-caption a{color:var(--ink);text-decoration-color:color-mix(in srgb,var(--ink) 50%,transparent)}
+.pixiv-caption a:hover{color:var(--paper)}
+.pixiv-caption p,.pixiv-related-empty{color:var(--dust)}
+/* フォローは主の手と同じ顔 (pixiv の青は BUNKO の中では浮く) */
+.bunko-refined .pixiv-creator-row .px-follow{background:var(--nail);color:var(--night)}
+.bunko-refined .pixiv-creator-row .px-follow.is-on{background:var(--shelf);color:var(--dust)}
+
+/* 詳細の値の左端を揃える: タグは触れた時の座 (左右 3px) のぶん内へ寄り、日付や種別の行とずれていた */
+.detail-rows .row-value:has(>.tag){margin-left:-3px}
+.detail-rows.pixiv-metadata .row-value:has(>.tag){margin-left:0}
+/* 表示設定の小窓の印も、設定の窓と同じく主の手の色で (青の直書きをやめる) */
+.ui-display-menu input[type=checkbox]{accent-color:var(--nail)}
+.ui-display-menu input[type=range]{accent-color:color-mix(in srgb,var(--paper) 65%,var(--cabinet))}
+
+/* 操作一覧 (?): 見出しが古い設定の灰の箱 (.settings-head の直書き #25262a) を借りて、板の中に別の箱が浮いていた。
+   面と同じ地に戻し、見出しと鍵の字は主題の字の色で (明では橙の字が沈む) */
+.help{background:color-mix(in srgb,var(--night) 82%,transparent)}
+.help-panel{border-color:var(--line-strong);border-radius:12px;box-shadow:var(--panel-shadow);padding:18px 24px 24px}
+.help .settings-head{background:none;padding:0 0 12px;margin:0 0 4px;border-bottom:1px solid var(--rule)}
+.help-panel h2{color:var(--paper);font-weight:600;letter-spacing:.04em}
+.help-group h3{font-family:var(--font);letter-spacing:.08em}
+kbd{color:var(--paper);border-color:var(--line-strong);border-radius:4px}
+
+/* 表紙が届くまでの地: 青黒のグラデーション (#11161e → #1b2230) が残っていて、明では濃紺の箱が一瞬並んだ。
+   主題の面の色で待つ。縁は絵の上に 1px だけ重ねて、白っぽい表紙も地に溶けないようにする (寸法は動かない) */
+.cover{background:linear-gradient(180deg,var(--cabinet),var(--shelf))}
+/* z-index:2 は 済・★・頁数の札 (auto) より上に来る。透明の 1px の縁だから隠れないが、ここに塗りを足さないこと */
+.grid:not(.is-list) .cover::after,.grid.is-list .cover::after{content:'';position:absolute;inset:0;z-index:2;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--paper) 7%,transparent)}
+
+/* 読む画面は触らない (2026-09-20 の決め)。上で起こした --dust は、ここでは前の値のままにする */
+.reader{--dust:rgba(241,241,238,.45)}
+body[data-ui-theme=navy] .reader{--dust:rgba(234,226,183,.5)}
+body[data-ui-theme=light] .reader{--dust:rgba(0,48,73,.5)}
+/* 表示設定の表紙の大きさは頁ごとに覚える。欄の名の横に今の頁 (hitomi の一覧・Home の作者頁 …) を小さく */
+.ui-display-menu .size-label small{margin-left:8px;font-size:11px;color:var(--dust);font-weight:400}

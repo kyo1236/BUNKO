@@ -1,0 +1,140 @@
+{
+  "name": "hitomi-box",
+  "version": "1.1.0",
+  "description": "BUNKO (文匣): search hitomi / nhentai / pixiv / Pawchive in one window and read the books you own in an Eagle library",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "setup": "node scripts/setup-third-party.js",
+    "pretest": "node scripts/check-tests.js",
+    "test": "node --test \"test/*.test.js\"",
+    "dev": "electron .",
+    "postinstall": "node scripts/patch-node-hitomi.js",
+    "dist": "electron-builder --win nsis",
+    "aliases": "node scripts/build-aliases.js",
+    "aliases:verify": "node scripts/build-aliases.js --manual",
+    "bench:catalog": "node scripts/bench-catalog.js",
+    "bench:dupe": "node scripts/bench-dupe.js",
+    "bench:archive": "node scripts/bench-archive.js",
+    "bench:media": "node scripts/bench-media.js",
+    "bench": "npm run bench:catalog && npm run bench:dupe && npm run bench:archive && npm run bench:media"
+  },
+  "keywords": [
+    "electron",
+    "eagle",
+    "reader",
+    "hitomi",
+    "nhentai",
+    "pixiv",
+    "pawchive"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.bunko.app",
+    "productName": "BUNKO",
+    "artifactName": "BUNKO-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/icon.ico",
+      "assets/icon-256.png",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "extraResources": [
+      {
+        "from": "third_party/better-sqlite3",
+        "to": "better-sqlite3"
+      },
+      {
+        "from": "scripts/enable-readonly-autostart.ps1",
+        "to": "scripts/enable-readonly-autostart.ps1"
+      },
+      {
+        "from": "scripts/sync-to-homecore.ps1",
+        "to": "scripts/sync-to-homecore.ps1"
+      },
+      {
+        "from": "third_party/kemono-dl",
+        "to": "kemono-dl",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!*.log"
+        ]
+      },
+      {
+        "from": "third_party/python",
+        "to": "python",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/*.wasm",
+      "node_modules/pdfjs-dist/build/pdf.worker.min.js",
+      "src/lib/pdf-unpack-worker.js",
+      "src/lib/creator-list-parser.js",
+      "src/lib/pdf-predictor.js",
+      "node_modules/sharp/**",
+      "node_modules/@img/**",
+      "node_modules/detect-libc/**",
+      "node_modules/semver/**",
+      "node_modules/better-sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**",
+      "src/lib/ai-meta.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "include": "assets/installer.nsh",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BUNKO",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "node-hitomi": "^9.2.0",
+    "pdfjs-dist": "^3.11.174",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.4",
+    "sql.js": "^1.14.2",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "jsqr": "^1.4.0"
+  }
+}

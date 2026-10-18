@@ -1,0 +1,147 @@
+/* 読む画面の右の板 (情報 / プロンプト) と、札の「プロンプトあり」の印 (issue #3、2026-10-18)。
+   色は bunko-ui.css の body の語。読む画面の地は主題に依らず暗い (#07090d) ので、板の中は墨の値に固定する。
+   開閉で動かすのは transform と不透明度だけ。絵の側は padding で一度に寄せる (幅の transition は 2048px の絵の下では
+   ガタつきになる)。 */
+.reader { --reader-side-w: 400px; }
+@media (max-width: 1180px) { .reader { --reader-side-w: 340px; } }
+/* 板は詳細と同じ顔: 端から少し離れた角丸の板 (縁取りの帯ではない)。絵の側は板 + 余白ぶん左へ */
+.reader { --reader-side-gap: 12px; }
+.reader.has-side .reader-body { padding-right: calc(var(--reader-side-w) + var(--reader-side-gap) * 2); }
+.reader.has-side .nav.next { right: calc(var(--reader-side-w) + var(--reader-side-gap) * 2); }
+.reader.has-side .reader-boundary { right: calc(var(--reader-side-w) + var(--reader-side-gap) * 2); }
+.reader-side {
+  --night: #17191c; --cabinet: #202327; --shelf: #2a2e33; --paper: #f1f1ee;
+  --dust: rgba(241, 241, 238, .5); --rule: rgba(255, 255, 255, .09);
+  --hover: color-mix(in srgb, var(--paper) 6%, transparent); --line-strong: color-mix(in srgb, var(--paper) 14%, transparent);
+  --weight-up: #7fd8dc; --weight-down: #e08aa8; --nail: #e7e7e2;
+  --card-bg: color-mix(in srgb, var(--shelf) 70%, var(--cabinet));
+  position: absolute; top: var(--reader-side-gap); right: var(--reader-side-gap); bottom: var(--reader-side-gap); width: var(--reader-side-w); z-index: 5;
+  background: var(--cabinet); color: var(--paper); border-radius: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); overflow: hidden;
+  display: flex; flex-direction: column; min-height: 0; text-align: left;
+  font: 13px/1.5 var(--font, "Zen Kaku Gothic New", "Yu Gothic UI", sans-serif); letter-spacing: .01em;
+  transform: translateX(calc(100% + var(--reader-side-gap) * 2)); visibility: hidden;
+  transition: transform 480ms cubic-bezier(.16, 1, .3, 1), visibility 0s linear 480ms;
+}
+.reader.has-side .reader-side { transform: none; visibility: visible; transition: transform 480ms cubic-bezier(.16, 1, .3, 1); }
+.reader-side[hidden] { display: flex; }
+.reader-side::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--paper) 18%, transparent); }
+@media (prefers-reduced-motion: reduce) { .reader-side { transition: none; } }
+
+/* 帯の釦の絵は他 (svgIcon の 16px) と同じ大きさに */
+#reader-info svg, #reader-prompt svg { width: 16px; height: 16px; }
+.reader-side::before { content: ''; display: block; width: 44px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--paper) 18%, transparent); margin: 10px auto 0; flex: none; }
+
+/* ---- 板の中身 ---- */
+.ai-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px; flex: none; }
+.ai-head h3 { margin: 0; font: 600 15px/1.3 var(--mincho, serif); letter-spacing: .04em; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-head .fmt { font-size: 11px; color: var(--dust); padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+.ai-x { width: 30px; height: 30px; display: grid; place-items: center; border: 0; background: none; border-radius: 6px; color: var(--dust); padding: 0; cursor: pointer; }
+.ai-x:hover { background: var(--hover); color: var(--paper); }
+.ai-x svg { width: 16px; height: 16px; }
+.ai-pager { display: inline-flex; align-items: center; gap: 2px; background: var(--night); border-radius: 7px; padding: 2px; }
+.ai-pager button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; background: none; border-radius: 5px; color: var(--dust); padding: 0; cursor: pointer; }
+.ai-pager button:hover:not(:disabled) { background: var(--hover); color: var(--paper); }
+.ai-pager button:disabled { opacity: .35; cursor: default; }
+.ai-pager button svg { width: 15px; height: 15px; }
+.ai-pager span { font-size: 12px; min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+.ai-tools { display: flex; align-items: center; gap: 6px; padding: 0 14px 10px; flex: none; }
+.ai-tools .seg { display: flex; padding: 2px; background: var(--night); border-radius: 7px; }
+.ai-tools .seg button { padding: 3px 9px; font-size: 11.5px; border: 0; background: none; border-radius: 5px; color: var(--dust); cursor: pointer; }
+.ai-tools .seg button[aria-pressed=true] { background: var(--shelf); color: var(--paper); }
+.ai-tools .spacer { flex: 1; }
+.ai-tools .act { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 12px; color: var(--paper); background: var(--shelf); cursor: pointer; }
+.ai-tools .act:disabled { opacity: .4; cursor: default; }
+.ai-tools .act.primary { background: var(--nail); color: var(--night); font-weight: 700; }
+.ai-tools .act svg { width: 14px; height: 14px; }
+.ai-tools .act.is-done { box-shadow: inset 0 0 0 1.5px var(--weight-up); }
+.ai-body { flex: 1; min-height: 0; overflow: auto; padding: 0 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.ai-card { background: var(--card-bg); border-radius: 10px; padding: 10px 12px 11px; position: relative; }
+.ai-card header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ai-card header h4 { margin: 0; font: 600 12px var(--font, sans-serif); letter-spacing: .06em; color: var(--dust); flex: 1; min-width: 0; }
+.ai-card header h4 b { color: var(--paper); font-weight: 600; }
+.ai-card header h4 small { font-weight: 400; margin-left: 6px; }
+.ai-card.is-neg header h4 { color: color-mix(in srgb, var(--weight-down) 80%, var(--dust)); }
+.ai-card .copy, .ai-settings .copy { width: 26px; height: 26px; display: grid; place-items: center; border: 0; background: none; border-radius: 6px; color: var(--dust); opacity: .7; padding: 0; cursor: pointer; }
+.ai-card:hover .copy, .ai-settings:hover .copy { opacity: 1; }
+.ai-card .copy:hover, .ai-settings .copy:hover { background: var(--hover); color: var(--paper); }
+.ai-card .copy svg, .ai-settings .copy svg { width: 14px; height: 14px; }
+.ai-card .copy.is-done, .ai-settings .copy.is-done { color: var(--weight-up); opacity: 1; }
+.ai-text { margin: 0; font: 12.5px/1.65 var(--font, sans-serif); white-space: pre-wrap; word-break: break-word; color: color-mix(in srgb, var(--paper) 92%, transparent); user-select: text; }
+.w-up { color: var(--weight-up); }
+.w-down { color: var(--weight-down); }
+.w-n { opacity: .72; font-size: .92em; }
+.ai-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.ai-chips button { padding: 2px 9px; border: 0; border-radius: 999px; background: var(--night); font-size: 12px; color: color-mix(in srgb, var(--paper) 86%, transparent); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: transform 220ms cubic-bezier(.2, .8, .2, 1), background-color 220ms cubic-bezier(.2, .8, .2, 1); }
+.ai-chips button:hover { background: var(--shelf); transform: translateY(-1px); }
+.ai-chips button.w-up { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weight-up) 60%, transparent); }
+.ai-chips button.w-down { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weight-down) 60%, transparent); }
+.ai-chips button.is-done { background: color-mix(in srgb, var(--weight-up) 22%, transparent); }
+.ai-settings { background: var(--card-bg); border-radius: 10px; padding: 10px 12px 6px; }
+.ai-settings header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ai-settings header h4 { margin: 0; font: 600 12px var(--font, sans-serif); letter-spacing: .06em; color: var(--dust); flex: 1; }
+.ai-settings dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 0; font-size: 12.5px; }
+.ai-settings dt { color: var(--dust); padding: 4px 0; border-top: 1px solid var(--rule); }
+.ai-settings dd { margin: 0; padding: 4px 0; border-top: 1px solid var(--rule); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.ai-settings dt:first-of-type, .ai-settings dd:first-of-type { border-top: 0; }
+.ai-settings dd.is-model { white-space: normal; }
+/* 取得中: 大きさを先に決め、中は脈だけ (空白を出さない) */
+.ai-skel .ai-card, .ai-skel .ai-settings { min-height: 92px; }
+.ai-skel .bone { height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--paper) 10%, transparent); margin: 7px 0; animation: ai-pulse 1.2s ease-in-out infinite; }
+.ai-skel .bone.s { width: 40%; } .ai-skel .bone.m { width: 70%; } .ai-skel .bone.l { width: 92%; }
+@keyframes ai-pulse { 50% { opacity: .45; } }
+.ai-empty { padding: 26px 18px; text-align: center; color: var(--dust); font-size: 12.5px; display: grid; gap: 8px; justify-items: center; }
+.ai-empty p { margin: 0; }
+.ai-empty svg { width: 28px; height: 28px; opacity: .6; }
+.ai-empty.is-fail { color: color-mix(in srgb, #d62828 70%, var(--paper)); }
+.ai-empty .retry { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 0; border-radius: 6px; background: var(--shelf); color: var(--paper); font-size: 12px; cursor: pointer; }
+.ai-empty .retry svg { width: 13px; height: 13px; }
+.ai-note { margin: 0; font-size: 11.5px; color: var(--dust); padding: 0 2px; }
+.ai-link { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; color: var(--dust); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ai-link:hover { color: var(--paper); }
+.ai-link svg { width: 12px; height: 12px; }
+/* 情報 = 詳細と同じ中身 (bunko-ui.css の .detail に結んである見た目をここでも) */
+.ai-info-detail { padding-bottom: 24px; }
+.ai-detail-body { display: flex; flex-direction: column; align-items: center; gap: 16px; min-width: 0; text-align: center; }
+.ai-detail-body .detail-cover { width: 58%; margin: 4px 0 0; border-radius: 8px; max-height: none; position: relative; overflow: hidden; background: var(--shelf); }
+.ai-detail-body .detail-cover img { width: 100%; height: auto; display: block; }
+.ai-detail-body h2 { font: 600 19px/1.45 var(--mincho, serif); letter-spacing: .01em; max-width: 22em; width: 100%; padding: 0; margin: 0; text-wrap: balance; }
+.ai-detail-body .kicker { font: 11.5px var(--font, sans-serif); color: var(--dust); margin: 0; }
+.ai-detail-body .detail-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0; }
+.ai-detail-body .detail-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px 0 11px; border: 0; border-radius: 6px; background: var(--shelf); color: var(--paper); font: 500 13px var(--font, sans-serif); cursor: pointer; }
+.ai-detail-body .detail-actions button.primary { background: var(--nail); color: var(--night); font-weight: 700; }
+.ai-detail-body .detail-actions button svg { width: 18px; height: 18px; }
+.ai-detail-body .detail-rows { width: 100%; max-width: 340px; font: 12.5px var(--font, sans-serif); display: grid; grid-template-columns: 4.5em minmax(0, 1fr); column-gap: 14px; row-gap: 9px; margin: 4px 0 0; text-align: left; align-items: baseline; line-height: 1.65; }
+.ai-detail-body .detail-rows .row-label { text-align: right; color: var(--dust); }
+.ai-detail-body .detail-rows .tag { background: transparent; border: 0; border-radius: 4px; font: 12.5px var(--font, sans-serif); padding: 1px 3px; color: var(--tag-color, color-mix(in srgb, var(--paper) 70%, transparent)); cursor: pointer; }
+.ai-detail-body .detail-rows .tag:hover { background: var(--shelf); }
+.ai-detail-body .pixiv-detail-related { width: 100%; text-align: left; }
+
+/* 情報 (簡易の表: 手のひら版など detailBodyMarkup が無い所) */
+.ai-info .ai-title { margin: 2px 0 2px; font: 600 16px/1.45 var(--mincho, serif); letter-spacing: .01em; text-wrap: balance; }
+.ai-rows { margin: 8px 0 0; display: grid; grid-template-columns: 4.5em minmax(0, 1fr); column-gap: 12px; row-gap: 9px; font-size: 12.5px; }
+.ai-rows dt { text-align: right; color: var(--dust); }
+.ai-rows dd { margin: 0; min-width: 0; }
+.ai-rows .tag { display: inline-block; padding: 1px 3px; margin: 0 2px 2px 0; border-radius: 4px; color: var(--tag-color, color-mix(in srgb, var(--paper) 70%, transparent)); }
+.ai-rows .tag.artist { --tag-color: var(--tag-artist); }
+.ai-rows .tag.group { --tag-color: var(--tag-group); }
+.ai-rows .tag.series { --tag-color: var(--tag-series); }
+.ai-rows .tag.character { --tag-color: var(--tag-character); }
+.ai-rows .tag.male { --tag-color: var(--tag-male); }
+.ai-rows .tag.female { --tag-color: var(--tag-female); }
+.ai-caption { margin: 10px 0 0; font-size: 12px; color: color-mix(in srgb, var(--paper) 80%, transparent); white-space: pre-wrap; }
+.ai-toast { position: fixed; left: 50%; bottom: 64px; z-index: 200; transform: translate(-50%, 8px); padding: 7px 14px; border-radius: 8px; background: var(--paper); color: var(--night); font-size: 12.5px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 220ms, transform 220ms; }
+.ai-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- 札の「プロンプトあり」の印: 表紙の縁 (bunko-ui.css の .cover::after の 1px の縁) を薄く染める。寸法は動かない ---- */
+.grid:not(.is-list) .card.has-prompt .cover::after, .grid.is-list .card.has-prompt .cover::after {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--prompt-mark) 90%, transparent);
+}
+/* 詳細の下の関連作品と、読む画面の継ぎ目の関連作品: 表紙に青枠 (寸法は動かさない) */
+.pixiv-related-item.has-prompt .pixiv-related-cover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--prompt-mark) 90%, transparent); border-radius: 4px; }
+.reader-related-work.has-prompt .reader-related-cover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--prompt-mark) 90%, transparent); border-radius: 6px; }
+/* 帯のプロンプトの釦: 今の頁 (分からなければ作品) にプロンプトがあれば、板を閉じていても青 */
+.reader-bar #reader-prompt.has-prompt { color: var(--prompt-mark); }
+.reader-bar #reader-prompt.has-prompt.active, .reader-bar #reader-prompt.has-prompt:hover { color: var(--prompt-mark); background: color-mix(in srgb, var(--prompt-mark) 16%, transparent); }
+/* 詳細の「プロンプト」の釦: 印のある作品では左に小さな点 */
+.detail-actions button[data-ai-meta]::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--dust) 50%, transparent); margin-right: 2px; }
+.detail-actions button[data-ai-meta].has-prompt::before { background: var(--prompt-mark); }

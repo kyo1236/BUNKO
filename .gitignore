@@ -1,0 +1,35 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+config.local.json
+_tmp/
+
+# 調査・試写で出る物 (作業木に残るが版に入れない)
+frames/
+.playwright-mcp/
+# 試験・ビルドの記録と使い捨ての台本 (会ごとに直下へ溜まっていた。まとめて _tmp/ へ寄せる)
+.tmp-*
+dist-*/
+# X の調べ (x-research の出力)
+x_research/
+
+# .claude: 会 (Claude Code) ごとの設定と作業木
+.claude/
+
+# 調べの材料 (523MB)。試験と scripts/ が読むので、枝の worktree には scripts/worktree.js がジャンクションで繋ぐ
+work/
+
+# Jev (TypeSafe) の API キー。利用者が母屋の直下に置く。中身は読まない・版に入れない (scripts/tools/jev.js だけが読む)
+Jev-API_key.txt
+
+# 同梱物は版に入れない (kemono-dl はライセンス不在、Python は 20MB のバイナリ)。`npm run setup` が取り直す
+third_party/kemono-dl/
+third_party/python/
+# better-sqlite3 の Electron 向けの .node (npm run setup が prebuild から取る。配布は extraResources で resources/ へ)
+third_party/better-sqlite3/
+
+# 機体固有の値 (配布先・写しの道)。雛形は bunko.local.example.json
+bunko.local.json
+CLAUDE.local.md

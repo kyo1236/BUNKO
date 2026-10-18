@@ -1,0 +1,193 @@
+{
+  "$comment": "手動エイリアス。search-aliases.js がランタイムでマージ。npm run aliases で消えない。count は npm run aliases:verify が自動記入（新規は省略か0でよい）。label は任意で、指定すると表示名の自動選定（pickLabel）を上書きする。preferred は曖昧衝突時にこのエントリを優先する。",
+  "entries": [
+    {
+      "value": "female:mind_control",
+      "labels": [
+        "催眠",
+        "洗脳",
+        "マインドコントロール"
+      ],
+      "preferred": true,
+      "count": 46111
+    },
+    {
+      "value": "male:tomgirl",
+      "labels": [
+        "男の娘",
+        "女装男子"
+      ],
+      "label": "男の娘",
+      "preferred": true,
+      "count": 40505
+    },
+    {
+      "value": "male:crossdressing",
+      "labels": [
+        "男の子の女装"
+      ],
+      "count": 37939
+    },
+    {
+      "value": "male:shota",
+      "labels": [
+        "ショタ"
+      ],
+      "label": "ショタ",
+      "preferred": true,
+      "count": 118022
+    },
+    {
+      "value": "female:milf",
+      "labels": [
+        "人妻"
+      ],
+      "count": 102889
+    },
+    {
+      "value": "female:netorare",
+      "labels": [
+        "NTR"
+      ],
+      "label": "寝取られ",
+      "count": 85331
+    },
+    {
+      "value": "female:nakadashi",
+      "labels": [
+        "中出し"
+      ],
+      "count": 262827
+    },
+    {
+      "value": "female:big_ass",
+      "labels": [
+        "巨尻",
+        "デカ尻"
+      ],
+      "count": 61949
+    },
+    {
+      "value": "female:bunny_girl",
+      "labels": [
+        "バニー",
+        "バニーガール"
+      ],
+      "count": 26924
+    },
+    {
+      "value": "female:urination",
+      "labels": [
+        "おもらし",
+        "お漏らし"
+      ],
+      "count": 38731
+    },
+    {
+      "value": "female:kemonomimi",
+      "labels": [
+        "獣耳",
+        "ケモミミ"
+      ],
+      "count": 69362
+    },
+    {
+      "value": "tag:full_color",
+      "labels": [
+        "フルカラー"
+      ],
+      "count": 115594
+    },
+    {
+      "value": "tag:time_stop",
+      "labels": [
+        "時間停止"
+      ],
+      "count": 2687
+    },
+    {
+      "value": "female:blowjob",
+      "labels": [
+        "フェラ",
+        "フェラチオ"
+      ],
+      "label": "フェラ",
+      "preferred": true,
+      "count": 207988
+    },
+    {
+      "value": "female:stockings",
+      "labels": [
+        "ニーソ",
+        "ニーソックス"
+      ],
+      "preferred": true,
+      "count": 217345
+    },
+    {
+      "value": "female:bondage",
+      "labels": [
+        "拘束"
+      ],
+      "count": 113246
+    },
+    {
+      "value": "female:gender_morph",
+      "labels": [
+        "TSF"
+      ],
+      "label": "性転換",
+      "count": 277
+    },
+    {
+      "value": "female:mesugaki",
+      "labels": [
+        "メスガキ"
+      ],
+      "label": "メスガキ",
+      "preferred": true,
+      "count": 3238
+    },
+    {
+      "value": "female:maid",
+      "labels": [
+        "メイド"
+      ],
+      "label": "メイド",
+      "preferred": true,
+      "count": 33324
+    },
+    {
+      "value": "female:paizuri",
+      "labels": [
+        "パイズリ"
+      ],
+      "label": "パイズリ",
+      "preferred": true,
+      "count": 105963
+    },
+    {
+      "value": "female:rape",
+      "labels": [
+        "レイプ"
+      ],
+      "label": "レイプ",
+      "preferred": true,
+      "count": 111781
+    },
+    {
+      "value": "female:teacher",
+      "labels": [
+        "せんせい"
+      ],
+      "count": 18518
+    },
+    {
+      "value": "character:sensei",
+      "labels": [
+        "せんせい"
+      ],
+      "count": 12872
+    }
+  ]
+}

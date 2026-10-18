@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <!-- pdf.js は node_modules から読み、worker は blob: 経由で起きる -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' file: blob:; worker-src 'self' file: blob:; child-src 'self' file: blob:; img-src 'self' http://127.0.0.1:* data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* blob:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>文匣</title>
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="bunko-ui.css" />
+  <link rel="stylesheet" href="bunko-preferences.css" />
+  <link rel="stylesheet" href="home.css" />
+  <link rel="stylesheet" href="ai-meta-ui.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 6c「中央検索」: ロゴ左・検索中央・道具右。部品は枠を持たず、状態は金の下線だけで言う -->
+    <header class="rail">
+      <div class="rail-left">
+        <div class="brand">
+          <span class="brand-mark">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="文匣">
+              <g fill="var(--nail)">
+                <rect x="14" y="16" width="72" height="6"/>
+                <rect x="14" y="16" width="6" height="68"/>
+                <rect x="14" y="78" width="72" height="6"/>
+                <rect x="30" y="38" width="10" height="40" transform="rotate(-14 40 78)"/>
+                <rect x="44" y="43" width="10" height="35"/>
+                <rect x="57" y="37" width="10" height="41"/>
+                <rect x="70" y="44" width="9" height="34"/>
+                <rect x="38" y="34.5" width="26" height="8" transform="rotate(-24 38 42.5)"/>
+              </g>
+            </svg>
+          </span>
+          <div class="brand-text">
+            <strong>文匣</strong>
+            <em>BUNKŌ</em>
+          </div>
+        </div>
+        <label class="sr-only" for="source">サイト</label>
+        <select id="source" class="source-select" title="サイト"></select>
+        <button id="scope" class="scope-toggle" type="button" title="所持作品から検索 - オフライン対応" aria-label="所持作品から検索 - オフライン対応" aria-pressed="false"></button>
+      </div>
+
+      <form id="search-form" class="search" autocomplete="off">
+        <button id="search-go" type="submit" class="search-go" title="検索" aria-label="検索"></button>
+        <label class="sr-only" for="query">検索</label>
+        <input id="query" name="query" type="search" placeholder="ヤンデレ ブルアカ  /  female:yandere  /  ID  /  URL" />
+        <button id="query-clear" class="query-clear" type="button" title="消去 — Esc" aria-label="検索語を消去" hidden>×</button>
+        <ul id="suggest" class="suggest" hidden></ul>
+      </form>
+
+      <div class="rail-actions">
+        <label class="sr-only" for="language">言語</label>
+        <select id="language" class="lang-select" title="言語"></select>
+        <span class="rail-sep" aria-hidden="true"></span>
+        <button id="btn-settings" class="ghost iconbtn" type="button" title="設定" aria-label="設定"></button>
+        <button id="btn-queue" class="ghost iconbtn queue-toggle" type="button" title="ダウンロード" aria-label="ダウンロード"><span id="queue-count">0</span></button>
+      </div>
+    </header>
+
+    <section class="filters">
+      <div class="chips" id="types"></div>
+      <div class="filter-tail">
+        <p id="result-info" class="result-info" hidden></p>
+        <label class="sr-only" for="sort">並び</label>
+        <select id="sort" class="sort-select" title="並び"></select>
+        <!-- 向きの札の指定席。札が引っ込んでも枠は 30px を返さないので、
+             道具の出入りで帯の折り返し (= 高さ) が動かない -->
+        <span class="sort-slot"><button id="sort-dir" class="ghost iconbtn sm sort-dir" type="button" title="降順 — クリックで昇順" aria-label="並びの向き"></button></span>
+        <div class="zoom-ctrl">
+          <!-- 札は一枚。押すと表示の小窓 (bunko-ui.js)。大きさは Ctrl+ホイールと小窓の「表紙の大きさ」で替える
+               (右クリックの一段送りは 2026-09-27 に外した)。段の名は替えた時だけ脇に 1.2 秒浮く (幅も高さも取らない) -->
+          <span id="zoom-name" class="zoom-name" aria-hidden="true"></span>
+          <button id="zoom-cycle" class="ghost iconbtn sm" type="button" title="表示の大きさ" aria-label="表示の大きさ"></button>
+        </div>
+        <!-- 道具の指定席。同時に出るのは最大 2 つ (所持/★ + 抜け/一括更新) で、
+             枠は 2 つぶんの幅を持ち続ける: 出入りで帯の折り返しを動かさないため -->
+        <div class="tail-tools">
+          <button id="hide-owned" class="ghost iconbtn sm" type="button" title="所持済みを隠す" aria-label="所持済みを隠す" aria-pressed="false"></button>
+          <button id="fav-only" class="ghost iconbtn sm" type="button" title="お気に入りだけ" aria-label="お気に入りだけ" aria-pressed="false" hidden></button>
+          <button id="paw-bulk" class="ghost iconbtn sm" type="button" title="お気に入りを一括更新" aria-label="一括更新" hidden></button>
+        </div>
+        <span id="paw-bulk-status" class="paw-bulk-status" hidden></span>
+      </div>
+      <div id="recents" class="recents"></div>
+    </section>
+
+    <main class="workspace">
+      <!-- 状態の帯。棚の上に重ねて出す (高さを取らない: 札の位置が動くとガタつく) -->
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden>
+        <span id="notice-text" class="notice-text"></span>
+        <span id="notice-bar" class="notice-bar" hidden><i></i></span>
+        <button id="notice-close" class="notice-close" type="button" title="閉じる" aria-label="閉じる">&#215;</button>
+      </div>
+      <section id="grid" class="grid"></section>
+      <p id="empty" class="empty" hidden>見つかりませんでした</p>
+      <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+      <div id="sentinel" class="sentinel"></div>
+    </main>
+
+    <aside id="detail" class="detail" hidden>
+      <button id="detail-close" class="icon-close" type="button" title="閉じる" aria-label="閉じる"></button>
+      <div id="detail-body"></div>
+    </aside>
+
+    <aside id="queue" class="queue" hidden>
+      <header>
+        <h2>ダウンロード</h2>
+        <div class="queue-tools">
+          <button id="open-dest" class="ghost iconbtn" type="button" title="保存先フォルダを開く" aria-label="保存先フォルダを開く"></button>
+          <button id="clear-finished" class="ghost iconbtn" type="button" title="完了と中止をリストから消す" aria-label="完了と中止をリストから消す"></button>
+          <button id="cancel-all" class="ghost iconbtn" type="button" title="進行中をすべて中止" aria-label="進行中をすべて中止"></button>
+        </div>
+      </header>
+      <!-- 保存先のパスは見せない (2026-08-26 利用者指定)。開くのは頭の釦から -->
+      <p id="dest-path" class="dest-path" hidden></p>
+      <section id="queue-active" class="queue-section" hidden>
+        <p class="queue-head">進行中 <span id="queue-active-count" class="queue-num">0</span></p>
+        <ul id="jobs"></ul>
+      </section>
+      <section id="queue-done" class="queue-section" hidden>
+        <p class="queue-head">完了 <span id="queue-done-count" class="queue-num">0</span></p>
+        <ul id="jobs-done"></ul>
+      </section>
+    </aside>
+
+    <!-- シリーズの抜け。所持している巻から数えるだけの控え室 (探しには行かない) -->
+  </div>
+
+  <div id="loupe" class="loupe" hidden>
+    <div id="loupe-pages" class="loupe-pages"></div>
+    <p id="loupe-caption" class="loupe-caption"></p>
+  </div>
+
+  <div id="reader" class="reader" hidden>
+    <header class="reader-bar">
+      <button id="reader-close" class="rbtn" type="button" title="閉じる — Esc" aria-label="閉じる"></button>
+      <div class="reader-heading">
+        <p id="reader-title"></p>
+        <span id="reader-stars" class="reader-stars" hidden></span>
+      </div>
+      <div class="reader-tools">
+        <button id="reader-fit" class="rbtn" type="button"></button>
+        <button id="reader-spread" class="rbtn" type="button"></button>
+        <button id="reader-offset" class="rbtn" type="button" hidden title="ずらし — 頁の組を1つずらす" aria-label="ずらし"></button>
+        <button id="reader-rtl" class="rbtn" type="button"></button>
+        <span class="sep"></span>
+        <span id="reader-page" title="頁ジャンプ — g" role="button" tabindex="0"></span>
+        <input id="reader-page-input" class="reader-page-input" type="number" min="1" step="1" aria-label="頁番号" hidden />
+        <span class="sep"></span>
+        <button id="reader-info" class="rbtn" type="button" title="情報 — i" aria-label="情報" aria-pressed="false"></button>
+        <button id="reader-prompt" class="rbtn" type="button" title="プロンプト — p" aria-label="プロンプト" aria-pressed="false" hidden></button>
+        <span class="sep"></span>
+        <button id="reader-download" class="rbtn" type="button" title="保存" aria-label="保存"></button>
+      </div>
+    </header>
+    <div id="reader-body" class="reader-body">
+      <button id="reader-prev" class="nav prev" type="button" aria-label="前へ"></button>
+      <figure id="reader-stage">
+        <div id="reader-pages" class="reader-pages">
+          <span class="reader-page-slot" data-reader-slot="0">
+            <img id="reader-image" alt="" />
+            <span class="reader-page-status" aria-live="polite"></span>
+          </span>
+          <span class="reader-page-slot" data-reader-slot="1" hidden>
+            <img id="reader-image2" alt="" />
+            <span class="reader-page-status" aria-live="polite"></span>
+          </span>
+        </div>
+        <p id="reader-loading" class="reader-loading">読み込み中… <button id="reader-cancel" type="button">キャンセル</button></p>
+      </figure>
+      <button id="reader-next" class="nav next" type="button" aria-label="次へ"></button>
+      <p id="reader-hint" class="reader-hint" hidden>クリックで頁送り · ダブルクリックで原寸 · Ctrl+ホイールで拡大 · ? でヘルプ</p>
+      <div id="reader-boundary" class="reader-boundary" hidden></div>
+      <aside id="reader-side" class="reader-side ai" aria-label="情報とプロンプト"></aside>
+    </div>
+    <input id="reader-seek" type="range" min="0" max="0" value="0" aria-label="頁シーク" />
+  </div>
+
+  <div id="reader-thumbs" class="reader-thumbs" hidden>
+    <div id="reader-thumbs-grid" class="reader-thumbs-grid"></div>
+  </div>
+
+  <div id="help" class="help" role="dialog" aria-modal="true" aria-label="ヘルプ" hidden>
+    <div class="help-panel">
+      <header class="settings-head">
+        <h2>操作一覧</h2>
+        <button id="help-close" class="icon-close" type="button" title="閉じる" aria-label="閉じる"></button>
+      </header>
+      <div id="help-body" class="help-body"></div>
+    </div>
+  </div>
+
+  <div id="paw-link" class="help paw-link" role="dialog" aria-modal="true" aria-label="所持アイテムと紐付け" hidden>
+    <div class="help-panel paw-link-panel">
+      <header class="settings-head">
+        <h2 id="paw-link-title">紐付け</h2>
+        <button id="paw-link-close" class="icon-close" type="button" title="閉じる" aria-label="閉じる"></button>
+      </header>
+      <p id="paw-link-note" class="paw-link-note"></p>
+      <div id="paw-link-body" class="paw-link-body"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="settings" role="dialog" aria-modal="true" aria-label="設定" hidden>
+    <div class="settings-panel">
+      <header class="settings-head">
+        <h2>設定</h2>
+        <button id="settings-close" class="icon-close" type="button" title="閉じる" aria-label="閉じる"></button>
+      </header>
+
+      <div class="settings-body">
+        <nav class="settings-tabs" role="tablist" aria-label="設定カテゴリ">
+          <button class="settings-tab" type="button" role="tab" data-tab="read" aria-controls="settings-tab-read" aria-selected="true">読みかた</button>
+          <button class="settings-tab" type="button" role="tab" data-tab="library" aria-controls="settings-tab-library" aria-selected="false">棚</button>
+          <button class="settings-tab" type="button" role="tab" data-tab="download" aria-controls="settings-tab-download" aria-selected="false">取り込み</button>
+          <button class="settings-tab" type="button" role="tab" data-tab="lan" aria-controls="settings-tab-lan" aria-selected="false">端末で読む</button>
+        </nav>
+
+        <div class="settings-pane">
+
+      <section id="settings-tab-read" class="settings-tabpanel" role="tabpanel" data-tab="read">
+      <div class="set-row">
+        <span class="set-label">所持作品を開く先</span>
+        <span class="set-value"></span>
+        <div class="set-acts">
+          <select id="set-open-owned">
+            <option value="app">このアプリ</option>
+            <option value="eagle">Eagle</option>
+          </select>
+        </div>
+        <p class="set-hint">Eagle に無いものはこのアプリで開きます</p>
+      </div>
+
+      <div class="set-row set-say">
+        <span class="set-label">途中から再開</span>
+        <div class="set-acts">
+          <button id="set-reader-resume" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">前回読んでいた頁から開く</p>
+      </div>
+
+      <div class="set-row set-say">
+        <span class="set-label">最終頁で次の作品の札</span>
+        <div class="set-acts">
+          <button id="set-reader-next-card" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">読み終えたら一覧の次の作品へ進む。「見せる」なら先に札を挟み、もう一度送ると開く。「直に開く」なら札なしでそのまま開く</p>
+      </div>
+
+      <div class="set-row set-say">
+        <span class="set-label">カードに載せると拡大</span>
+        <div class="set-acts">
+          <button id="set-loupe" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">一覧で札に載せたまま待つと、表紙を大きく出します</p>
+      </div>
+
+      <div class="set-row set-mouse">
+        <span class="set-label">カードの操作</span>
+        <div class="set-acts">
+          <span class="set-pick"><span>左</span><select id="set-mouse-left"><option value="detail">詳細を開く</option><option value="read">読む</option><option value="save">保存</option><option value="none">なし</option></select></span>
+          <span class="set-pick"><span>右</span><select id="set-mouse-right"><option value="detail">詳細を開く</option><option value="read">読む</option><option value="save">保存</option><option value="none">なし</option></select></span>
+          <span class="set-pick"><span>ダブル</span><select id="set-mouse-double"><option value="detail">詳細を開く</option><option value="read">読む</option><option value="save">保存</option><option value="none">なし</option></select></span>
+        </div>
+        <p class="set-hint">一覧の札を押したときに何をするか</p>
+      </div>
+
+      <details class="set-more">
+        <summary>詳細</summary>
+        <div class="set-row">
+          <span class="set-label">× を押したとき</span>
+          <span class="set-value set-desc">トレイに残す分数</span>
+          <div class="set-acts">
+            <input id="set-tray-close" type="number" min="0" max="1440" title="閉じたあと、トレイに畳んだ窓を捨てるまでの分数 (0 なら閉じたら終了)" />
+          </div>
+          <p class="set-hint">0 なら閉じたら終了、それ以外はその分数だけトレイに残ります (LAN 配信は続く)</p>
+        </div>
+      </details>
+      </section>
+
+      <section id="settings-tab-library" class="settings-tabpanel" role="tabpanel" data-tab="library" hidden>
+      <!-- 検索できる所持作品の数と、裏で待っている仕事を一行に併せた (旧「ライブラリ」+「状態」) -->
+      <div class="set-row" title="検索できる所持作品の数と、裏で待っている仕事">
+        <span class="set-label">棚の状態</span>
+        <span class="set-value set-owned"><span id="set-owned">0 作品</span> / <span id="set-health" class="set-value">—</span></span>
+        <div class="set-acts">
+          <button id="set-rescan" class="ghost sm" type="button">全件を読み直す</button>
+        </div>
+        <div id="set-library-bar" class="set-bar" hidden><span></span></div>
+        <p id="set-library-hint" class="set-hint">メタデータと Eagle タグは自動で同期</p>
+      </div>
+
+      <div class="set-row">
+        <span class="set-label">Eagle ライブラリ</span>
+        <span id="set-eagle-dir" class="set-value"></span>
+        <div class="set-acts">
+          <button id="set-eagle-choose" class="ghost iconbtn sm" type="button" title="変更" aria-label="変更"></button>
+          <button id="set-eagle-clear" class="ghost iconbtn sm" type="button" title="クリア" aria-label="クリア"></button>
+        </div>
+        <p class="set-hint">済 判定に使う Eagle ライブラリのパス</p>
+      </div>
+
+      <div class="set-row">
+        <span class="set-label">Home の一覧 (デバッグ)</span>
+        <span class="set-value"></span>
+        <div class="set-acts">
+          <select id="set-home-unresolved">
+            <option value="off">すべての作者</option>
+            <option value="on">判定できなかった作者だけ</option>
+          </select>
+        </div>
+        <p class="set-hint">突き合わせで確かめても決められなかった候補を持つ作者だけを Home に出します。作者頁と詳細は変わりません</p>
+      </div>
+
+      <div class="set-row set-say" title="hitomi と対応の取れていない Eagle アイテムも所持一覧に混ぜて出します">
+        <span class="set-label">紐付いていない所持作品も出す</span>
+        <div class="set-acts">
+          <button id="set-show-unmatched" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">どのサイトの作品か分からない Eagle アイテムも棚に混ぜる</p>
+      </div>
+
+      <div class="set-row">
+        <span class="set-label">★ 絞り込みの下限</span>
+        <span id="set-favorite-value" class="set-value set-owned">★4 以上</span>
+        <div class="set-acts">
+          <select id="set-favorite-stars">
+            <option value="3">★3 以上</option>
+            <option value="4">★4 以上</option>
+            <option value="5">★5 のみ</option>
+          </select>
+        </div>
+        <p class="set-hint">ツールバーの ★ を押したときに残る、Eagle 評価の下限</p>
+      </div>
+
+      <div class="set-row set-say" title="pixiv の AI 生成の札を、網の一覧と所持棚の両方で伏せます">
+        <span class="set-label">AI 生成を隠す (pixiv)</span>
+        <div class="set-acts">
+          <button id="set-pixiv-hide-ai" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">検索は pixiv 側で除き、フォロー新着や候補は札の側で伏せる</p>
+      </div>
+
+      <div class="set-row set-say" title="AI 作品の生成情報 (プロンプト) を aitag.win に問い合わせます。送るのは投稿の番号だけ">
+        <span class="set-label">プロンプトを aitag.win に訊く (pixiv)</span>
+        <div class="set-acts">
+          <button id="set-aitag" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">AI の札に「プロンプトあり」の印が付き、読む画面の板が速くなる。切ると原寸の絵から自前で読む (印は出ない)</p>
+      </div>
+
+      <div class="set-row set-say" title="網の pixiv の投稿を読み手で開く時の絵の大きさ">
+        <span class="set-label">原寸で読む (pixiv)</span>
+        <div class="set-acts">
+          <button id="set-pixiv-read-original" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">入っていると原寸 (1 頁 数 MB)。切ると 1200 px (pixiv の閲覧と同じ) で軽く出る。落とす時は常に原寸</p>
+      </div>
+
+      <details class="set-more">
+        <summary>詳細</summary>
+        <div class="set-row set-say">
+          <span class="set-label">裏の自動処理 (メタ取得・照合・タグ・作者名)</span>
+          <div class="set-acts">
+            <button id="set-auto-sync" class="set-switch" type="button"></button>
+          </div>
+          <p class="set-hint">切ると走査だけになり、メタもタグも取りに行きません</p>
+        </div>
+
+        <div class="set-row" title="棚 DB と焼き頁を写しのミラー置き場へ送る">
+          <span class="set-label">今すぐ写しへ送る</span>
+          <span class="set-value set-desc">棚 DB を書き出してから写す</span>
+          <div class="set-acts">
+            <button id="set-sync-homecore" class="ghost sm" type="button">送る</button>
+          </div>
+          <p class="set-hint">毎時の自動同期とは別に、その場で反映したいとき用</p>
+        </div>
+      </details>
+      </section>
+
+      <section id="settings-tab-download" class="settings-tabpanel" role="tabpanel" data-tab="download" hidden>
+      <div class="set-row">
+        <span class="set-label">取り込み先フォルダ</span>
+        <span id="set-download-dir" class="set-value"></span>
+        <div class="set-acts">
+          <button id="set-download-choose" class="ghost iconbtn sm" type="button" title="変更" aria-label="変更"></button>
+          <button id="set-download-open" class="ghost iconbtn sm" type="button" title="フォルダを開く" aria-label="フォルダを開く"></button>
+        </div>
+        <p class="set-hint">サイトから落とした作品を置く先</p>
+      </div>
+
+      <div class="set-row">
+        <span class="set-label">保存形式</span>
+        <span class="set-value"></span>
+        <div class="set-acts">
+          <select id="set-save-format"><option value="zip">ZIP</option><option value="raw">フォルダのまま</option><option value="pdf">PDFにまとめる</option></select>
+        </div>
+        <p class="set-hint">Eagle へ入れるなら ZIP か PDF が扱いやすい</p>
+      </div>
+
+      <div class="set-row set-say">
+        <span class="set-label">持っている作品を保存する前に確認する</span>
+        <div class="set-acts">
+          <button id="set-owned-confirm" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">済 の札が付いた作品を、誤って二度取りに行かないように</p>
+      </div>
+
+      <div class="set-row" title="お気に入り作者の新着を PDF にまとめて置く先。Eagle の取り込みがこの並びを見ています">
+        <span class="set-label">Pawchive の置き場</span>
+        <span id="set-paw-bulk-dir" class="set-value"></span>
+        <div class="set-acts">
+          <button id="set-paw-bulk-choose" class="ghost iconbtn sm" type="button" title="変更" aria-label="変更"></button>
+          <button id="set-paw-bulk-open" class="ghost iconbtn sm" type="button" title="フォルダを開く" aria-label="フォルダを開く"></button>
+        </div>
+        <p class="set-hint">&lt;置き場&gt;/&lt;サイト&gt;/&lt;作者名 [id]&gt;/ に置きます</p>
+      </div>
+
+      <div class="set-row" title="pixiv の一覧と保存には本アカウントのログインが要ります。refresh token は母艦にだけ置きます">
+        <span class="set-label">pixiv</span>
+        <span id="set-pixiv-status" class="set-value">未ログイン</span>
+        <div class="set-acts">
+          <button id="set-pixiv-login" class="ghost sm" type="button">ログイン</button>
+          <button id="set-pixiv-token" class="ghost sm" type="button" title="ログインの窓が使えない時: 別の道で得た refresh token を貼る">token を貼る</button>
+          <button id="set-pixiv-logout" class="ghost sm" type="button" hidden>ログアウト</button>
+        </div>
+        <p id="set-pixiv-hint" class="set-hint">落とした本は Eagle の作者根に、題だけの名前で入ります</p>
+      </div>
+
+      <details class="set-more">
+        <summary>詳細</summary>
+        <div class="set-row" title="名前に投稿 ID を持つ古い pixiv の項目 (PPD で落とした物) に url を書き、pixiv の本として読めるようにする">
+          <span class="set-label">pixiv の付け直し</span>
+          <span id="set-pixiv-relabel-count" class="set-value set-desc">対象なし</span>
+          <div class="set-acts">
+            <button id="set-pixiv-relabel" class="ghost sm" type="button" hidden>付け直す</button>
+          </div>
+          <p class="set-hint">Eagle が起動している時に。名前はそのまま、表示は題だけになります</p>
+        </div>
+        <div class="set-row" title="所持の pixiv の本の生成情報 (プロンプト) を一度だけ確かめて控えに入れる。aitag → PDF の中 → pixiv の原寸 の順">
+          <span class="set-label">プロンプトの埋め戻し (所持)</span>
+          <span id="set-ai-meta-count" class="set-value set-desc"></span>
+          <div class="set-acts">
+            <button id="set-ai-meta-backfill" class="ghost sm" type="button">確かめる</button>
+          </div>
+          <p class="set-hint">一本ずつ順に。pixiv が混んだら止まって待つ。読む画面の板と札の印が所持の本でも出るようになる</p>
+        </div>
+
+        <div class="set-row">
+          <span class="set-label">同時に取る画像の数</span>
+          <span class="set-value set-desc">既定 4</span>
+          <div class="set-acts">
+            <input id="set-concurrency" type="number" min="1" max="16" title="同時に取得する画像数" />
+          </div>
+          <p class="set-hint">増やすほど速いが、サイトに断られやすくなります</p>
+        </div>
+
+        <div class="set-row">
+          <span class="set-label">同時に進める冊数</span>
+          <span class="set-value set-desc">既定 8</span>
+          <div class="set-acts">
+            <input id="set-max-galleries" type="number" min="1" max="8" title="同時に処理するギャラリー数" />
+          </div>
+          <p class="set-hint">控え室で一度に走らせる作品の数</p>
+        </div>
+
+        <div class="set-row">
+          <span class="set-label">同時に見る作者の数</span>
+          <span class="set-value set-desc">既定 2</span>
+          <div class="set-acts">
+            <input id="set-paw-bulk-concurrency" type="number" min="1" max="6" title="同時に見る作者の数" />
+          </div>
+          <p class="set-hint">増やしすぎると pawchive に断られます (429)</p>
+        </div>
+      </details>
+      </section>
+
+      <section id="settings-tab-lan" class="settings-tabpanel" role="tabpanel" data-tab="lan" hidden>
+      <div class="set-row set-say">
+        <span class="set-label">スマホ・タブレットから読む</span>
+        <div class="set-acts">
+          <button id="set-lan" class="set-switch" type="button"></button>
+        </div>
+        <p class="set-hint">同じ Wi-Fi の中の端末から、所持作品をブラウザで読めるようにします</p>
+      </div>
+
+      <div class="set-row">
+        <span class="set-label">アドレス</span>
+        <span id="set-lan-url" class="set-value"></span>
+        <div class="set-acts">
+          <button id="set-lan-copy" class="ghost sm" type="button">コピー</button>
+        </div>
+      </div>
+
+      <div class="set-qr" id="set-lan-qr" hidden>
+        <img id="set-lan-qr-img" alt="共有アドレスの QR コード" width="200" height="200">
+        <span>端末のカメラで読み取ってください (家の中)</span>
+      </div>
+
+      <!-- Tailscale が母艦に居るときだけ現れる、外から読むための入り口 -->
+      <div class="set-row" id="set-lan-ts-row" hidden>
+        <span class="set-label">外から (Tailscale)</span>
+        <span id="set-lan-ts-url" class="set-value"></span>
+        <div class="set-acts">
+          <button id="set-lan-ts-copy" class="ghost sm" type="button">コピー</button>
+        </div>
+      </div>
+      <div class="set-qr" id="set-lan-ts-qr" hidden>
+        <img id="set-lan-ts-qr-img" alt="Tailscale 用アドレスの QR コード" width="200" height="200">
+        <span>外出先でも読むなら、こちらを据えてください</span>
+      </div>
+
+      <p class="set-note" id="set-lan-note"></p>
+      </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+  <!-- pdf.js (320KB) は読書で PDF を開くまで使わない。defer で初回描画前のパースを外す
+       (defer は DOMContentLoaded 前に必ず実行されるので、reader.js からの参照可能性は不変) -->
+  <script src="../../node_modules/pdfjs-dist/build/pdf.min.js" defer></script>
+  <script src="ai-meta-ui.js"></script>
+  <script src="reader.js"></script>
+  <script src="downloads-ui.js"></script>
+  <script src="dupe-cluster.js"></script>
+  <script src="navigation-state.js"></script>
+  <script src="virtual-grid.js"></script>
+  <script src="bunko-ui-model.js"></script>
+  <script src="bunko-preferences.js"></script>
+  <script src="bunko-icons.js"></script>
+  <script src="bunko-ui.js"></script>
+  <!-- Home (源泉横断の作者の一覧と作者頁)。app.js の関数を呼ぶ時に引くので先に読んでよい。
+       home-bundle.js は作者頁の束ね (源泉を跨いだ同作・見本・告知) の純粋な部品で、dupe-cluster.js の後 -->
+  <script src="home-bundle.js"></script>
+  <script src="home.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "_": "機体固有の道。bunko.local.json と名を変えて母屋の直下に置く (版には入らない)。作品名・タグ・資格情報は書かない",
+  "repo": "C:\\path\\to\\Bookshelf",
+  "mothership": "C:\\path\\to\\BUNKO",
+  "mirror": "D:\\path\\to\\BUNKO",
+  "mirrorData": "D:\\path\\to\\BUNKO-mirror"
+}

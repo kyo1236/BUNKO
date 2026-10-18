@@ -1,0 +1,106 @@
+/* The current desktop theme is the source of colors, type and icons. */
+html { -webkit-text-size-adjust:100%; }
+body { padding-bottom:env(safe-area-inset-bottom); }
+/* Keep horizontal touch/trackpad scrolling without a bar below the tabs. */
+.ui-topbar :is(.ui-sources,.chips,.ui-views,.ui-periods,.ui-ranks,.ui-pixiv-filters) { scrollbar-width:none; -ms-overflow-style:none; }
+.ui-topbar :is(.ui-sources,.chips,.ui-views,.ui-periods,.ui-ranks,.ui-pixiv-filters)::-webkit-scrollbar { display:none; width:0; height:0; }
+#settings { z-index:150; }
+#open-dest,.job-icon[data-open-eagle],.job-icon[data-show],.preferences [data-category=devices] { display:none!important; }
+.preferences-content::before { content:'表示・読書の設定はこの端末に保存します。作品の保存・管理は接続中のPCで実行します。'; display:block; color:var(--pref-muted); font-size:12px; line-height:1.7; margin-bottom:16px; }
+/* Phone browsing needs the whole screen once the controls have scrolled away. */
+@media (max-width:700px), (max-width:950px) and (pointer:coarse) {
+  .ui-topbar { position:relative; top:auto; }
+  html { scroll-padding-top:12px; }
+}
+@media (max-width:700px) {
+  :root { --detail-w:0px; }
+  body { min-width:0; }
+  .ui-topbar { padding-top:env(safe-area-inset-top); padding-bottom:6px; }
+  .rail { padding:10px 12px; gap:8px; flex-wrap:wrap; }
+  .rail-left { display:contents; }
+  .brand { order:0; }
+  .brand-mark { width:30px;height:30px; }
+  .brand-text { display:none; }
+  .rail-actions { order:1; margin-left:auto; }
+  .rail .search { order:3; flex:1 0 100%; max-width:none; height:44px; min-width:0; box-sizing:border-box; }
+  .rail .search input { font-size:16px; }
+  .ui-sources { order:2; width:100%; overflow-x:auto; border-radius:8px; box-sizing:border-box; }
+  .ui-sources button { flex:1; min-height:40px; }
+  .filters { padding:0 12px 6px; gap:4px; }
+  .chips { max-width:100%; overflow-x:auto; flex-wrap:nowrap; }
+  .chip { flex-shrink:0; min-height:40px; }
+  .filter-tail { flex-wrap:wrap; max-width:100%; gap:2px; }
+  .filter-tail .ui-periods { padding:2px; }
+  .filter-tail .ui-periods button { padding-inline:6px; }
+  .filter-tail .ui-sort-trigger { padding-inline:4px; }
+  .filter-tail .zoom-ctrl .iconbtn,.filter-tail .tail-tools .iconbtn { width:32px; padding:6px; }
+  .ui-views,.ui-periods,.ui-ranks,.ui-pixiv-filters { max-width:100%; overflow-x:auto; }
+  .ui-ranks button,.ui-periods button,.ui-views button,.ui-pixiv-filters button { min-height:40px; }
+  .workspace,.workspace.with-detail { padding:12px; margin-right:0; }
+  /* Home の作者頁の見出し: 扇 (168px) と題を横に並べると題が 157px に切れる。電話では扇の下に題を落とす */
+  .home-av-head { flex-wrap:wrap; gap:12px 20px; min-height:0; margin-bottom:20px; }
+  .home-av-title { flex:1 1 100%; }
+  .home-av-title h2 { font-size:22px; }
+  .home-av-pills { flex-wrap:wrap; overflow:visible; }
+  .detail { position:fixed; width:100%; max-width:none; right:0; top:auto; bottom:0; max-height:88dvh; box-sizing:border-box; border-radius:16px 16px 0 0; padding:16px 20px calc(20px + env(safe-area-inset-bottom)); z-index:100; }
+  .detail-actions { flex-wrap:wrap; }
+  .detail-actions button,.detail-quiet button,.detail-danger button { min-height:44px; }
+  .detail-cover { width:45%; }
+  .queue { width:100%; max-width:100%; box-sizing:border-box; padding:16px 12px; max-height:80dvh; overflow:auto; }
+  .ui-popover { max-width:calc(100vw - 24px); box-sizing:border-box; }
+  .preferences { width:100%; max-width:100%; height:100dvh; max-height:100dvh; border-radius:0; margin:0; padding-top:env(safe-area-inset-top); box-sizing:border-box; }
+  .preferences-shell { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
+  .preferences-sidebar { padding:12px; border-right:0; border-bottom:1px solid var(--pref-border); }
+  .preferences-sidebar h2,.preferences-brand,.preferences-search { display:none; }
+  .preferences-sidebar nav { display:flex; gap:4px; overflow-x:auto; }
+  .preferences-sidebar nav button { width:auto; white-space:nowrap; min-height:44px; margin:0!important; }
+  .preferences-sidebar nav .ic { display:none; }
+  .preferences-main { min-height:0; }
+  .preferences .preference-row { flex-wrap:wrap; gap:8px; }
+  .preferences .preference-control { flex-basis:100%; max-width:100%; }
+  .preferences input[type=text],.preferences select { font-size:16px; }
+  .preferences-main>footer { padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+  .reader-bar { flex-wrap:wrap; padding:8px 10px; padding-top:calc(8px + env(safe-area-inset-top)); gap:6px; }
+  .reader-heading { flex:1; min-width:0; }
+  .reader-tools { width:100%; justify-content:space-between; gap:2px; }
+  .reader-tools .rbtn,#reader-close { min-width:40px; min-height:44px; }
+  .reader .nav { width:40px; }
+  #reader-hint { display:none!important; }
+  #reader-seek { min-height:36px; margin-bottom:env(safe-area-inset-bottom); }
+  .card-acts { opacity:1; }
+  button,input,select { touch-action:manipulation; }
+}
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; } }
+
+.phone-reader-frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  border: 0;
+  z-index: 10000;
+  background: transparent;
+}
+.phone-reader-frame[hidden] { display: none; }
+/* Native library maintenance remains on the PC. */
+[data-act="paw-link"], [data-link], [data-trash] { display: none !important; }
+
+.phone-reader-frame { color-scheme: normal; }
+@media (max-width:700px) {
+  .grid:not(.is-list) { gap:8px; }
+  .card { min-width:0; }
+  .card-body { min-width:0; overflow:hidden; }
+}
+
+@media (max-width:700px) {
+  .queue, body.detail-open #queue {
+    left:8px; right:8px; top:calc(8px + env(safe-area-inset-top));
+    width:auto; max-width:none;
+    max-height:calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-x:hidden;
+  }
+  .queue .job { grid-template-columns:minmax(0,1fr) auto; }
+  .queue .job-error { white-space:normal; overflow-wrap:anywhere; }
+  .queue .job-actions { flex-wrap:wrap; }
+}

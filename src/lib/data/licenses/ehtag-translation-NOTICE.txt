@@ -1,0 +1,21 @@
+EhTagTranslation/Database
+https://github.com/EhTagTranslation/Database
+
+Used in BUNKO for: the Japanese-script names attached to E-Hentai artist / group /
+character / parody tags (search-vocabulary.json entries whose evidence method is
+"ehtag-translation-name", 660 entries). Only the name strings are used; descriptions
+and images are not copied.
+
+Snapshot: master @ 0b43391c154df85d0c2ee694a7d6d1e9d560a0ea (2026-09-21).
+File hashes are recorded in search-vocabulary.json "sources".
+
+License of the database text: Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+(CC BY-NC-SA 3.0) - https://creativecommons.org/licenses/by-nc-sa/3.0/
+Entries marked (*) in the source carry descriptions derived from Wikipedia
+(CC BY-SA 3.0) and entries marked (**) from Moegirlpedia (CC BY-NC-SA 3.0),
+as stated in each file's "copyright" front matter. BUNKO does not copy those descriptions.
+
+Attribution: EhTagTranslation/Database contributors.
+The derived name list (the "ehtag-translation-name" entries of search-vocabulary.json)
+is shared under the same CC BY-NC-SA 3.0 terms: attribution, non-commercial use, share-alike.
+The rest of BUNKO (source code) is MIT; see LICENSE and src/lib/data/licenses/README.md.

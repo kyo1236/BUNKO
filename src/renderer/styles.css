@@ -1,0 +1,3625 @@
+:root {
+  --night: #0c1016;
+  --cabinet: #141a22;
+  --shelf: #1b2230;
+  --card: #1f2734;
+  --rule: #2c3648;
+  --paper: #efe8d8;
+  --dust: #8a93a3;
+  --ink: #79aed4;
+  --nail: #c9a227;
+  --jade: #2fbfa0;
+  --stamp: #c14b3a;
+  --warn: #e0a04a;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --font: "Zen Kaku Gothic New", "Yu Gothic UI", "Meiryo", sans-serif;
+  --mono: "IBM Plex Mono", "Consolas", monospace;
+  /* 帯の高さは中身で変わる (窓が狭いと折り返す): app.js が実寸を入れ直す。
+     詳細パネルはこの下から始めて、設定/ダウンロードの釦を隠さない */
+  --rail-h: 75px;
+  --detail-w: 420px;
+
+  /* 動きの長さは三段だけ。同じ意味の動きに違う長さが当たっていると、
+     自覚はされないまま「なんとなく揃っていない」として残る */
+  --t-fast: 120ms;   /* 色・不透明度・押し込み */
+  --t-base: 180ms;   /* 板の出入り・幅 */
+  --t-slow: 280ms;   /* 下線が開く・表紙が伸びる */
+
+  /* 余白は 4px の段。札の大きさ (--card-min と段の 88/124/168/220/280) は
+     別系統なので、この段には乗せない */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 40px;
+
+  /* 角は二つ。札・チップ・タグの角 0 は意図して残す (紙と印の顔) */
+  --r-panel: 10px;
+  --r-pill: 999px;
+  --src-w: 7.5rem;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--night);
+  color: var(--paper);
+  font-family: var(--font);
+  letter-spacing: 0.01em;
+}
+
+/* 細く控えめなスクロールバー: 棚の埃くらいの存在感で、触れたときだけ少し起きる。
+   標準の scrollbar-width/color は Chromium で ::-webkit-scrollbar を無効化するため使わない */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(138, 147, 163, 0.28);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(138, 147, 163, 0.48);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(138, 147, 163, 0.62);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 棚の長さが変わってスクロールバーが出入りしても (サイトを替えると棚が一瞬空になる・読む画面が
+   body の overflow を止める)、上の帯と棚の幅を動かさない: 溝を常に取っておく。
+   無いと、替えるたびに検索欄が 6px・右の道具が 12px 横へ揺れて戻っていた (ui-probe で測った) */
+html {
+  scrollbar-gutter: stable;
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; }
+
+/* 手ごたえの規約: 触れると真鍮、押すと 1px 沈む、焦点は同じ枠で囲う */
+.search-go, .ghost, .chip, .icon-close, .detail-actions button,
+.reader-bar button, .tag, .recent button, .job-actions button, .card-act,
+.suggest button, .scope-toggle, .source-select, .link-hit, .link-query,
+.filter-selects select, .set-acts select, .set-acts input {
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease, background-color var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+
+.search-go:active, .ghost:active, .chip:active, .icon-close:active,
+.detail-actions button:active, .reader-bar button:active, .tag:active,
+.recent button:active, .job-actions button:active, .card-act:active,
+.suggest button:active, .scope-toggle:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--nail);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+#app {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(201, 162, 39, 0.08), transparent 50%),
+    linear-gradient(180deg, #10151d 0%, var(--night) 180px);
+}
+
+/* 6c「中央検索」: ロゴ左・検索中央・道具右の対称構成。
+   帯の中の部品は枠と背景を捨て、状態は金 (--nail) の下線だけで言う */
+.rail {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 560px) 1fr;
+  gap: var(--s5);
+  align-items: center;
+  /* 余白はモック (6c) の値。帯の下罫は filters の下に一本だけ引く */
+  padding: var(--s5) var(--s7) var(--s4);
+}
+
+.rail-left {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--nail);
+  flex: none;
+}
+
+.brand-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.brand-text strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Yu Mincho', 'YuMincho', 'Hiragino Mincho ProN', serif;
+  letter-spacing: 0.3em;
+}
+
+.brand-text em {
+  display: block;
+  font-style: normal;
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+/* 文字の顔をしたセレクト (サイト・言語・並び) の共通の作法 */
+.source-select,
+.lang-select,
+.sort-select {
+  border: 0;
+  background: transparent;
+  outline: none;
+  appearance: none;
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  padding: var(--s1) var(--s4) var(--s1) 2px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--dust) 50%),
+    linear-gradient(135deg, var(--dust) 50%, transparent 50%);
+  background-position:
+    calc(100% - 8px) calc(50% - 1px),
+    calc(100% - 4px) calc(50% - 1px);
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.source-select option,
+.lang-select option,
+.sort-select option {
+  background: var(--cabinet);
+  color: var(--paper);
+}
+
+.source-select:hover,
+.source-select:focus,
+.lang-select:hover,
+.lang-select:focus,
+.sort-select:hover,
+.sort-select:focus {
+  color: var(--nail);
+}
+
+.source-select:disabled {
+  color: var(--dust);
+  cursor: default;
+}
+
+/* 所持作品スコープ: 本棚のしるし。入は金の下線が立つ */
+.scope-toggle {
+  flex: 0 0 auto;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--dust);
+}
+
+.scope-toggle::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 2px;
+  background: var(--nail);
+  transform: scaleX(0);
+  transition: transform var(--t-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.scope-toggle svg { display: block; }
+
+.scope-toggle:hover { color: var(--nail); }
+
+.scope-toggle:hover::after { transform: scaleX(1); }
+
+.scope-toggle.active {
+  color: var(--nail);
+}
+
+.scope-toggle.active::after { transform: scaleX(1); }
+
+/* 検索: 明朝・中央揃えの文字が下線の上に乗る。
+   下線は常設の罫 (::after) と、中央から両側へ開く金 (::before) の二層 */
+.search {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s2);
+  border: 0;
+  background: transparent;
+  padding-bottom: 0;
+}
+
+.search::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--rule);
+}
+
+.search::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--nail);
+  z-index: 1;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--t-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.search:hover::before,
+.search:focus-within::before {
+  transform: scaleX(1);
+}
+
+/* 打鍵ごとの引き直しの最中。既にある 1px を脈打たせるだけで、
+   位置も高さも動かさない (帯や札を足すとガタつく) */
+.search.searching::before {
+  transform: scaleX(1);
+  animation: search-scan 0.9s ease-in-out infinite;
+}
+
+@keyframes search-scan {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search.searching::before { animation: none; opacity: 0.6; }
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0 var(--s1);
+  outline: none;
+  text-align: center;
+  font-family: 'Yu Mincho', 'YuMincho', 'Hiragino Mincho ProN', serif;
+  font-size: 17px;
+  letter-spacing: 0.06em;
+}
+
+.search input::placeholder {
+  color: #5c6575;
+  font-family: var(--font);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+/* Chromium が type=search に足す青い消去×は出さない (自前の × を使う) */
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/* 自前の消去 ×: 部品ではなく「文字」の顔。入力があるときだけ現れる */
+.query-clear {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #5c6575;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px var(--s1);
+  transition: color var(--t-base) ease;
+}
+
+.query-clear:hover { color: var(--paper); }
+
+.search-go, .ghost, .chip, .detail-actions button, .reader-bar button {
+  border: 1px solid var(--rule);
+  background: var(--shelf);
+}
+
+.search-go {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  padding: 0 2px var(--s1);
+  display: grid;
+  place-items: center;
+  color: #5c6575;
+  transition: color var(--t-slow) ease;
+}
+
+.search:focus-within .search-go,
+.search-go:hover {
+  color: var(--nail);
+}
+
+.search-go svg { display: block; }
+
+.search-go:hover, .ghost:hover, .chip:hover, .detail-actions button:hover {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+.ghost:disabled:hover, .chip:disabled:hover, .detail-actions button:disabled:hover {
+  border-color: var(--rule);
+  color: var(--paper);
+}
+
+.suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  /* 右上のダウンロード小窓 (25) や詳細 (30) の下に潜らない高さに置く */
+  z-index: 35;
+  margin: 0;
+  padding: var(--s1) 0;
+  list-style: none;
+  background: #121821;
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.suggest[hidden] {
+  display: block;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.suggest button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: var(--s2) var(--s3);
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.suggest button:hover,
+.suggest button.active { background: #1c2634; }
+
+.suggest button:hover .label,
+.suggest button.active .label { color: var(--nail); }
+
+/* 種類は左端の線の色で言う。色は詳細画面のタグと同じ物 (.tag.artist 以下) を使うので、
+   詳細で覚えた色がそのまま候補でも通じる。字で「キャラ」と書かないぶん幅が空く */
+.suggest-bar {
+  flex: none;
+  width: 2px;
+  border-radius: 2px;
+  margin-right: var(--s3);
+  background: var(--suggest-kind, #6d7887);
+  opacity: .7;
+}
+
+.suggest button:hover .suggest-bar,
+.suggest button.active .suggest-bar { opacity: 1; }
+
+.suggest button[data-kind="artist"] { --suggest-kind: #e3b34c; }
+.suggest button[data-kind="group"] { --suggest-kind: #d9c27e; }
+.suggest button[data-kind="series"] { --suggest-kind: #8fb8dd; }
+.suggest button[data-kind="character"] { --suggest-kind: #4cc9ad; }
+.suggest button[data-kind="male"] { --suggest-kind: #7fb0e0; }
+.suggest button[data-kind="female"] { --suggest-kind: #e08aa8; }
+/* 「男女どちらでも」は BUNKO 内だけの符丁。詳細に色が無いので男と女を重ねる */
+.suggest button[data-kind="either"] .suggest-bar {
+  background: linear-gradient(#7fb0e0 0 50%, #e08aa8 50% 100%);
+}
+
+.suggest-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 名前と所属作品は同じ行。狭い時は所属の側から詰める (名前は消さない) */
+.suggest-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.suggest .label {
+  color: var(--paper);
+  font-size: 13px;
+  flex: none;
+  max-width: 100%;
+}
+
+/* 読むのは作品名。送る値は確かめ用の控えなので、色の重さを逆にしてある */
+.suggest .series {
+  color: var(--ink);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggest .kind {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggest[data-source="pixiv"] button:hover .label,
+.suggest[data-source="pixiv"] button.active .label { color: var(--paper); }
+
+.suggest .count {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  align-self: center;
+  margin-left: var(--s3);
+}
+
+.rail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  justify-content: flex-end;
+}
+
+.rail-sep {
+  width: 1px;
+  height: 12px;
+  margin: 0 var(--s1);
+  background: var(--rule);
+}
+
+/* 帯の中のアイコン釦は枠を持たない (箱の顔は詳細・設定・リーダー側だけに残す)。
+   休んでいるときは灰、ホバーで紙、入は金 — 印は中央から開く下線 */
+.rail .iconbtn,
+.filters .iconbtn,
+.filters .ghost {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: #727b8b;
+  transition: color var(--t-base) ease;
+}
+
+.rail .iconbtn::after,
+.filters .iconbtn::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 1px;
+  height: 1px;
+  background: var(--nail);
+  transform: scaleX(0);
+  transition: transform var(--t-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.rail .iconbtn:hover,
+.filters .iconbtn:hover,
+.filters .ghost:hover {
+  border: 0;
+  color: var(--paper);
+}
+
+.rail .iconbtn:hover::after,
+.filters .iconbtn:hover::after {
+  transform: scaleX(1);
+}
+
+.rail .iconbtn.active,
+.filters .iconbtn.active,
+.filters .ghost.active {
+  background: transparent;
+  color: var(--nail);
+}
+
+.rail .iconbtn.active::after,
+.filters .iconbtn.active::after {
+  transform: scaleX(1);
+}
+
+.ghost {
+  padding: var(--s2) var(--s3);
+  font-size: 13px;
+}
+
+.ghost.active {
+  border-color: var(--nail);
+  color: var(--nail);
+  background: rgba(201, 162, 39, 0.08);
+}
+
+/* square icon buttons: the rail and the settings modal speak in glyphs */
+.iconbtn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-grid;
+  grid-auto-flow: column;
+  place-items: center;
+  gap: var(--s1);
+  line-height: 1;
+  color: var(--paper);
+}
+
+/* display を張り替えた釦は UA の [hidden]{display:none} が負ける。
+   hidden を付けたのに空箱が残る事故 (一括更新の枠だけ見える) をここで塞ぐ */
+.iconbtn[hidden],
+.ghost[hidden] {
+  display: none;
+}
+
+/* 同じ事故の残り: display を持つこれらも hidden で確実に消す
+   (pawchive では種別チップと言語選択が意味を持たないため隠している) */
+.chips[hidden],
+.lang-select[hidden] {
+  display: none;
+}
+
+.iconbtn.sm {
+  width: 30px;
+  height: 30px;
+}
+
+.iconbtn svg { display: block; }
+
+.iconbtn:hover {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+.iconbtn.active {
+  border-color: var(--nail);
+  color: var(--nail);
+  background: rgba(201, 162, 39, 0.08);
+}
+
+.iconbtn:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.iconbtn:disabled:hover {
+  border-color: var(--rule);
+  color: var(--paper);
+}
+
+.queue-toggle {
+  width: auto;
+  padding: 0 var(--s2);
+}
+
+.queue-toggle span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  padding: 0 var(--s1);
+  background: var(--nail);
+  color: #1a1403;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.queue-toggle span.pulse {
+  animation: badge-pulse .45s ease;
+}
+
+@keyframes badge-pulse {
+  0% { transform: scale(1); background: var(--nail); }
+  45% { transform: scale(1.35); background: var(--jade); }
+  100% { transform: scale(1); background: var(--nail); }
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  padding: 0 var(--s7) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
+
+/* チップも文字の顔: 枠なし、選択は金の文字と下線で言う (モック 6c と同値) */
+.chip {
+  position: relative;
+  border: 0;
+  background: transparent;
+  padding: var(--s1) var(--s3);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  color: var(--dust);
+}
+
+.chip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  height: 1px;
+  width: 0;
+  background: var(--nail);
+  transition: width var(--t-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.chip:hover {
+  border: 0;
+  color: var(--paper);
+}
+
+.chip:hover::after { width: 100%; }
+
+.chip.active {
+  border: 0;
+  color: var(--nail);
+  background: transparent;
+}
+
+.chip.active::after { width: 100%; }
+
+.chip.excluded {
+  border: 0;
+  color: rgba(193, 75, 58, 0.75);
+  text-decoration: line-through;
+  background: transparent;
+}
+
+/* 発見: type の並びに立つビューの入口。見た目は他のチップと同じでよい */
+
+.chip.excluded:hover {
+  color: var(--stamp);
+}
+
+.chip.excluded::after { background: var(--stamp); }
+
+/* 右端の道具群: 並び+向き・ズーム・目・星・paw */
+.filter-tail {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.filter-tail .result-info {
+  margin: 0 var(--s1) 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #5c6575;
+  white-space: nowrap;
+}
+
+/* 昇順/降順は「並び」の付属品: gap を打ち消して密着させる。
+   幅は枠が持つ: 札が引っ込んでも 30px は返さない */
+.sort-slot {
+  flex: 0 0 30px;
+  width: 30px;
+  display: flex;
+  justify-content: center;
+  margin-left: -12px;
+}
+
+/* 道具の指定席 (所持を隠す・★だけ・抜け・一括更新)。同時に出るのは最大 2 つ
+   なので 2 つぶん (30×2 + gap 14 = 74px) を常に確保する。
+   **幅を固定するのは高さのため**: この帯は折り返す flex 行で、道具が消えて
+   細くなると道具列がチップ列と同じ行に収まってしまい、帯が 1 行ぶん
+   (チップ行 25px + row-gap 8px = 33px) 縮む。棚ごと 33px 跳ねるのが
+   一番嫌われるガタつきなので、中身が減っても枠の幅は動かさない */
+.tail-tools {
+  /* 30px の札 2 つ + 間の 12px。中身が減っても返さない (帯の折り返し = 高さを
+     動かさないための指定席なので、幅は常に一定でなければならない) */
+  flex: 0 0 72px;
+  width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+
+.recents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  align-items: center;
+  width: 100%;
+}
+
+.recent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  max-width: 220px;
+  border: 1px solid var(--rule);
+  background: var(--cabinet);
+  padding: var(--s1) var(--s1) var(--s1) var(--s2);
+  color: var(--dust);
+  font-size: 12px;
+}
+
+.recent.pin {
+  border-color: rgba(201, 162, 39, 0.55);
+  color: var(--paper);
+}
+
+.recent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.recent button:hover { color: var(--nail); }
+
+.result-info {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  color: var(--dust);
+  font-size: 11px;
+}
+
+.result-info .interpreted {
+  color: var(--dust);
+  opacity: .75;
+  font-family: var(--mono);
+  max-width: 32em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 一括更新の進み具合。釦の脇に小さく添えるだけ (盤は作らない) */
+.paw-bulk-status {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.paw-bulk-status[hidden] { display: none; }
+
+/* 大きさは一枚の札。名札を浮かせる基準になるので relative。
+   札そのものは .ghost.iconbtn.sm (30×30) で隣の道具と揃う */
+.zoom-ctrl {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* 段の名。流れから外して札の左に浮かせるので、出ても消えても
+   帯の幅も高さも動かない (押すたびに棚が跳ねない) */
+.zoom-name {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 2px var(--s1);
+  border: 1px solid var(--rule);
+  background: var(--cabinet);
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: 0;
+  transition: opacity var(--t-base) ease;
+}
+
+.zoom-name.show { opacity: 1; }
+
+/* 種類の札を初めて押した時に脇へ浮く「右クリックで除外」(zoom-name と同じ顔。幅も高さも取らない) */
+.chips { position: relative; }
+.chip-hint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 2px var(--s1);
+  border: 1px solid var(--rule);
+  background: var(--cabinet);
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: 0;
+  transition: opacity var(--t-base) ease;
+}
+.chip-hint.show { opacity: 1; }
+
+.workspace {
+  /* ヘッダーの 40px と柱を揃え、帯の下罫から一呼吸 (26px) おいて棚が始まる */
+  padding: var(--s5) var(--s7) 120px;
+  /* 状態の帯を重ねるための基準。帯は流れに入らない (入れると札が下へずれる) */
+  position: relative;
+}
+
+/* 状態の帯。走査の進み・控えの欠け・配信の失敗をここ一枚で出す。
+   **高さを取らない**: 棚の札を押し下げると、利用者が一番嫌うガタつきになる */
+.notice {
+  /* 窓に貼る (流れにも棚の巻きにも乗せない)。absolute で棚に置くと、
+     少し下へ送っただけで帯が画面の外へ出てしまい、状態が見えなくなる */
+  position: fixed;
+  top: calc(var(--rail-h, 75px) + 8px);
+  left: 50%;
+  /* 隠れている時は 4px 上に居て、出る時に降りてくる。窓に貼ってある
+     (position: fixed) ので、どれだけ動かしても他の要素は一切動かない */
+  transform: translate(-50%, 0);
+  z-index: 6;
+  /* 幅は中身に合わせて JS が入れる (noticeFit)。flex の内在サイズは
+     中身より狭く出ることがあり (実測 240px)、CSS だけでは字が切られる。
+     max-width は JS が効かない時の保険 */
+  max-width: min(720px, calc(100vw - 120px));
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2) var(--s1) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--cabinet);
+  box-shadow: var(--shadow);
+  color: var(--dust);
+  font-size: .84rem;
+  line-height: 1.4;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--t-base) ease,
+    transform var(--t-base) ease,
+    width var(--t-base) ease,
+    visibility 0s linear 0s;
+}
+
+/* display を書いた要素は hidden 属性で消えない (作者の宣言が UA の
+   [hidden]{display:none} に勝つ)。消す道をこちらで書いておかないと
+   「閉じられない帯」になる。
+   ただし display:none では遷移が一切効かないので、候補窓 (.suggest) と
+   控え室 (.queue) が既に使っている型 — 席は残したまま opacity と
+   visibility で消す — に揃える。visibility を遅らせるのは薄れ切るまで
+   席を保つため */
+.notice[hidden] {
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition:
+    opacity var(--t-base) ease,
+    transform var(--t-base) ease,
+    visibility 0s linear var(--t-base);
+}
+
+/* 進みの棒は帯の中の部品。薄くすると席だけ残って隙間になるので畳む */
+.notice-bar[hidden] {
+  display: none !important;
+}
+
+/* 詳細を開くと棚が左へ寄るので、帯もその中央へ寄せる */
+body.detail-open .notice {
+  left: calc(50% - var(--detail-w) / 2);
+}
+
+.notice.warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--rule));
+}
+
+.notice-text {
+  /* 縮むのは文ではなく棒の側。狭いときに文が「Eagle タ…」に切られては
+     何の報せか分からない */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 進みの棒。幅だけが動くので、帯そのものの寸法は変わらない */
+.notice-bar {
+  /* 文に場所を譲る。最低 36px まで縮む */
+  flex: 0 1 84px;
+  min-width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.notice-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ink);
+  transition: width var(--t-slow) ease;
+}
+
+.notice-close {
+  flex: 0 0 auto;
+  /* × の字を丸の真ん中に置く。box だけ 22px にして中身を放ると、
+     字が左上へ寄って「丸の位置がずれている」ように見える */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  opacity: .6;
+}
+
+.notice-close:hover { opacity: 1; background: var(--rule); }
+
+/* 設定の値のうち、直らない状態を指している物 */
+.set-value.warn { color: var(--warn); }
+
+/* 詳細は棚の横の列に出す: 棚を詳細の幅だけ縮め、本の上には重ねない (利用者の決め 2026-09-27)。
+   開閉で棚が組み直されるのは承知の上 (重ねる形を一度試したが、下の本が隠れるので戻した) */
+body.detail-open .workspace,
+body.detail-open .filters {
+  margin-right: var(--detail-w);
+}
+
+body.detail-open #queue {
+  right: calc(var(--detail-w) + 22px);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 168px), 1fr));
+  gap: var(--s4) var(--s3);
+  justify-items: stretch;
+}
+
+/* 所持・版違いの除外は visibleGridItems で行う。
+   CSS で再度隠すと、タイトルだけ一致した未紐付け作品の位置が空白になる。 */
+
+.grid.is-list {
+  grid-template-columns: 1fr;
+  gap: var(--s1);
+}
+
+.grid.is-list .card {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.grid.is-list .cover {
+  width: 54px;
+  min-width: 54px;
+  height: 76px;
+  aspect-ratio: auto;
+}
+
+.grid.is-list .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.grid.is-list .card-title {
+  -webkit-line-clamp: 1;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid transparent;
+  text-align: left;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  cursor: pointer;
+}
+
+/* 一覧は仮想化していて、見えていない行は「行の高さ × 行数」の詰め物で代える。
+   題名が 1 行の札と 2 行の札で行の高さが違うと、詰め物の高さが窓の先頭の札しだいで
+   揺れて、一覧が一行ぶん上下に跳ね続ける (点滅) ので、題名は常に 2 行ぶんの高さを取る */
+.card-title {
+  min-height: 2.7em;
+}
+
+.grid.is-list .card-title {
+  min-height: 0;
+}
+
+/* 既存の金枠はホバーから外す。鍵盤の居場所は残すので枠は焦点にだけ。
+   金は .is-current (詳細を開いている札) の語に譲る */
+.card:focus-visible {
+  border-color: var(--nail);
+  outline: none;
+}
+
+
+/* A 系の紙に合わせた比率: 3/4 だと標準的な表紙の上下が削れる */
+.cover {
+  aspect-ratio: 105 / 148;
+  background:
+    linear-gradient(180deg, #11161e, #1b2230);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 札のホバー: サムネだけが器の中でわずかに伸びる。
+   札の外形は動かさず、枠も出さない (金は .is-current の語に残す)。
+   動かすのは transform と filter だけ — GPU 合成に乗り、再描画を起こさない */
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 端数のはみ出しは下を切る: 表題が載る上端は残す */
+  object-position: top center;
+  display: block;
+  transform: scale(1);
+  transform-origin: center center;
+  filter: brightness(1) saturate(1);
+  /* will-change は常時付けない: 全札ぶんの合成レイヤを確保してしまう。
+     動く見込みが立つホバー/フォーカス時にだけ下の規則で付ける */
+  transition:
+    transform var(--t-slow) ease,
+    filter var(--t-slow) ease;
+}
+
+/* 入りは速く、抜きは長い: 掴むのは速く、離すのは緩く。
+   一覧の上をマウスが通り過ぎただけでは波が立たない */
+.card:hover .cover img,
+.card:focus-visible .cover img {
+  will-change: transform, filter;
+  transform: scale(1.05);
+  filter: brightness(1.05) saturate(1.1);
+  transition-duration: var(--t-slow);
+  transition-timing-function: cubic-bezier(.2, .7, .3, 1);
+}
+
+/* 動きを止める設定: 寸法の変化は捨て、色の変化だけを即時で残す */
+@media (prefers-reduced-motion: reduce) {
+  .cover img { transition: none; }
+  .card:hover .cover img,
+  .card:focus-visible .cover img { transform: none; }
+}
+
+/* 画像が無い表紙。地の色はそのまま、記号だけ薄く中央に置く */
+.cover-blank {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--paper);
+  opacity: .18;
+}
+
+.cover-blank svg { display: block; }
+
+.owned-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px var(--s1);
+  background: var(--jade);
+  color: #06241c;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+/* 「同」= 所持済みの版違い。済 (翡翠) と読み分けるため琥珀で塗る。
+   すべて表示モードのときだけ目に入る札 */
+.owned-mark.similar-mark {
+  background: var(--warn);
+  color: #241a06;
+}
+
+/* 題が一致しているだけの 済 (ID 未紐付け)。塗り潰さず枠だけにして、
+   確かな 済 と読み分けられるようにする。外形は動かさない (札がずれない) */
+.owned-mark.loose-mark {
+  background: transparent;
+  color: var(--jade);
+  box-shadow: inset 0 0 0 1px var(--jade);
+}
+
+/* 「重」= 検索結果内の再アップロード重複。すべて表示モードでだけ目に入る */
+.owned-mark.dupe-mark {
+  background: var(--dust);
+  color: #10141c;
+}
+
+/* 星は評点、済 は状態。同じ塗りで並べると読み分けられないので、
+   評点は枠と字だけの控えめな札にして 済 の左に置く */
+.star-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px var(--s1);
+  background: rgba(12, 16, 22, 0.82);
+  border: 1px solid rgba(201, 162, 39, 0.5);
+  color: var(--nail);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+.card.owned .star-mark {
+  right: 40px;
+}
+
+.card.owned {
+  outline: 1px solid rgba(47, 191, 160, 0.28);
+}
+
+/* 詳細を開いている札。ファイル選択くらいの主張に留めつつ、
+   一目で見つかる濃さにする: 金の 2px (outline なので寸法は動かない)。
+   所持の細い枠より後に置いて、選択のほうを勝たせる */
+.card.is-current,
+.card.owned.is-current {
+  border-color: var(--nail);
+  outline: 2px solid var(--nail);
+  outline-offset: -1px;
+  background: #26313f;
+}
+
+.card.owned .card-title,
+.card.owned .card-artist {
+  color: var(--jade);
+}
+
+.card-acts {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+
+.card:hover .card-acts,
+.card:focus-within .card-acts {
+  opacity: 1;
+}
+
+.card-act {
+  flex: 1;
+  min-height: 28px;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  background: rgba(12, 16, 22, .88);
+  color: var(--paper);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.card-act svg { display: block; }
+
+.card-act:hover { color: var(--nail); }
+
+/* ★ は控えめに: 点いていないうちは薄い輪郭、点けば金の実線 */
+.card-act.paw-fav { opacity: .55; }
+.card-act.paw-fav:hover { opacity: 1; }
+.card-act.paw-fav.is-on { opacity: 1; color: var(--nail); }
+
+.grid.is-list .card-acts { display: none; }
+
+/* 小さい段 (最小 88px・小 124px) の札に釦を 4 つ並べると一つ 22〜31px に
+   なって押せない。要る物だけ残す。間引くのは CSS だけ = 段を変えても
+   札は組み直さない (組み直すと一覧が跳ねる)。
+   ・投稿/作品の札: 主な操作 + 詳細。鎖は詳細の「所持アイテムと紐付ける」から辿れる
+   ・作者の札: ★ と フォルダ対応付け は他に入口が無いので残し、代わりに
+     保存 を落とす (詳細パネルも作者には 保存 を出していない) */
+.grid[data-zoom="xs"] .card-act.paw-link,
+.grid[data-zoom="s"] .card-act.paw-link,
+.grid[data-zoom="xs"] .card.is-creator .card-act[data-act="save"],
+.grid[data-zoom="s"] .card.is-creator .card-act[data-act="save"] {
+  display: none;
+}
+
+.dl-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(36, 48, 64, .8);
+}
+
+.dl-strip i {
+  display: block;
+  height: 100%;
+  background: var(--jade);
+  transition: width var(--t-base);
+}
+
+.card-body {
+  padding: var(--s2);
+}
+
+.card-title {
+  margin: 0 0 var(--s1);
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-meta {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  color: var(--dust);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+/* 発見ビューの根拠行。札の下に一行だけ: なぜこれが出てきたか */
+.card-reason {
+  margin: 2px 0 0;
+  color: var(--dust);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 発見ビューの見出し。grid の中で一列を丸ごと使う */
+.disc-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  padding-bottom: var(--s1);
+  border-bottom: 1px solid var(--rule);
+}
+
+.disc-title {
+  color: var(--paper);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+.disc-desc {
+  color: var(--dust);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.disc-empty {
+  grid-column: 1 / -1;
+  margin: var(--s1) 0 var(--s3);
+  color: var(--dust);
+  font-size: 12px;
+}
+
+.card-artist {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-pages {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--dust);
+  font-family: var(--mono);
+}
+
+/* pixiv: 横長・正方の絵は上寄せだと顔が切れる。中央で切る (札の外形は同じ) */
+.card[data-shape="wide"] .cover img { object-position: center; }
+
+/* 「AI 生成を隠す」。伏せ方は所持と同じ display:none (件数の行が理由を言う) */
+.grid.hide-ai .card.ai { display: none; }
+
+/* 候補へ (♥)。★ は Eagle の物なので、pixiv のブックマークは別の形で。点けば金 */
+.card-act.px-bm { opacity: .55; }
+.card-act.px-bm:hover { opacity: 1; }
+.card-act.px-bm.is-on { opacity: 1; color: var(--nail); }
+
+/* 発見 (pixiv): おすすめの作者一人ぶんの行。作者の札 + 投稿 3 枚を、外の格子と同じ段組みで
+   並べる (列の幅が揃うので、行ごとに札が揃って見える)。行の間は細い破線 */
+.disc-user {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 168px), 1fr));
+  gap: var(--s4) var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px dashed var(--rule);
+}
+
+/* フォロー (pixiv の作者の札)。頁数の席に字の釦で。点いていれば薄い字 */
+.px-follow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 0 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.px-follow:hover { border-color: var(--nail); color: var(--nail); }
+.px-follow.is-on { color: var(--dust); border-color: transparent; background: rgba(255, 255, 255, .06); }
+.px-follow.is-on:hover { color: var(--paper); }
+
+.card-error {
+  padding: var(--s5) var(--s2);
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.empty, .status {
+  text-align: center;
+  color: var(--dust);
+  padding: 48px var(--s3);
+}
+
+.status.error { color: var(--warn); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status.busy::before,
+.kicker.busy::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--s1);
+  vertical-align: -2px;
+  border: 2px solid var(--rule);
+  border-top-color: var(--nail);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+.sentinel { height: 32px; }
+
+.recents[hidden],
+.result-info[hidden] {
+  display: none !important;
+}
+
+.detail {
+  position: fixed;
+  /* 帯の下から始める: 上端に居る 設定/ダウンロード を塞がないため */
+  top: var(--rail-h);
+  right: 0;
+  width: var(--detail-w);
+  height: calc(100% - var(--rail-h));
+  background: #11171f;
+  border-left: 1px solid var(--rule);
+  z-index: 30;
+  overflow: auto;
+  padding: var(--s5) var(--s5) 110px;
+  box-shadow: var(--shadow);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.detail[hidden] {
+  display: block;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+/* 閉じるは枠を持たない: ×の線だけが控えめに置かれ、触れたときだけ丸い座が浮く */
+.icon-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dust);
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.icon-close svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.6;
+}
+
+.icon-close:hover {
+  background: rgba(255, 255, 255, .06);
+  color: var(--paper);
+}
+
+.detail-cover {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: #0b0e13;
+  margin-bottom: var(--s3);
+}
+
+.detail h2 {
+  margin: 0 0 var(--s2);
+  font-size: 20px;
+  line-height: 1.35;
+  /* 右上の × (30px) と重ならない逃げ。器を広げたぶんここも一段上げる */
+  padding-right: var(--s7);
+}
+
+.kicker {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 12px;
+  margin: 0 0 var(--s3);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.detail-actions button {
+  padding: var(--s2) var(--s3);
+}
+
+.detail-actions .primary {
+  background: var(--nail);
+  color: #1a1403;
+  border-color: var(--nail);
+  font-weight: 700;
+}
+
+/* 紐付け/解除の段。毎日の口 (読む・保存) の列から外し、削除の一段上に置く。
+   稀な操作は絵ではなく言葉で名乗らせる */
+.detail-quiet {
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.detail-quiet .link-picker { margin-bottom: 0; }
+
+.quiet-act {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font-size: 12px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--dust);
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.quiet-act svg { display: block; }
+
+.quiet-act:hover {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+.quiet-act:active { transform: translateY(1px); }
+
+/* 一番下の削除。普段は灰で黙らせ、触れたときだけ朱 (--stamp) で警告する:
+   Eagle 側の実体まで消える操作を、開くたび赤で叫ばせない */
+.detail-danger {
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+
+/* 横幅いっぱいの一枚板。目立たせたいのではなく、押し場所を迷わせないため */
+.danger-act {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font-size: 12px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--dust);
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.danger-act svg { display: block; }
+
+.danger-act:hover {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.danger-act:active { transform: translateY(1px); }
+
+.link-picker {
+  border: 1px solid var(--rule);
+  padding: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.link-picker[hidden] { display: none; }
+
+.link-query {
+  width: 100%;
+  background: #0d1219;
+  border: 1px solid var(--rule);
+  padding: var(--s1) var(--s2);
+  font-size: 13px;
+}
+
+.link-query:focus {
+  outline: none;
+  border-color: var(--nail);
+}
+
+.link-hits {
+  list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.link-hits li + li { border-top: 1px solid var(--rule); }
+
+.link-hit {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: var(--s1);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--paper);
+}
+
+.link-hit:hover { color: var(--nail); }
+
+/* 候補の行: 題は伸ばし、鎖の印は右端に寄せる (行の高さは動かさない) */
+.link-hit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
+
+.link-hit-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-chain {
+  flex: none;
+  font-size: 10px;
+}
+
+/* 既に別の作品と結ばれている候補は選べるが、目では後ろに退かせる */
+.link-hit.is-used .link-hit-name { color: var(--dust); }
+
+.link-hit.is-current {
+  color: var(--jade);
+  border-left: 2px solid var(--jade);
+  padding-left: var(--s1);
+}
+
+.link-note {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: var(--s1);
+}
+
+.detail-rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s2) var(--s3);
+  margin: var(--s1) 0 var(--s3);
+}
+
+/* 版違い・再掲の候補一覧。伏せ札のぶんをここで開陳する */
+.detail-variants {
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+
+.variants-head {
+  margin: 0 0 var(--s2);
+  font-size: 12px;
+  color: var(--dust);
+}
+
+.detail-variants ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s1);
+}
+
+.variant-row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: var(--s2);
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: var(--s1);
+  border: 1px solid var(--rule);
+  background: var(--shelf);
+  color: var(--paper);
+  transition: border-color var(--t-fast) ease;
+}
+
+.variant-row:hover { border-color: var(--nail); }
+.variant-row:active { transform: translateY(1px); }
+
+.variant-thumb {
+  width: 44px;
+  height: 60px;
+  object-fit: cover;
+  background: var(--card);
+}
+
+.variant-body { display: grid; gap: var(--s1); min-width: 0; }
+
+.variant-title {
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.variant-meta {
+  font-size: 11px;
+  color: var(--dust);
+  font-family: var(--mono);
+}
+
+.detail-rows .row-label {
+  color: var(--dust);
+  font-size: 12px;
+  font-family: var(--mono);
+  padding-top: var(--s1);
+}
+
+.detail-rows .row-value {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.detail-rows .row-text {
+  color: var(--paper);
+  font-size: 13px;
+  padding-top: var(--s1);
+}
+
+.tag {
+  border: 1px solid var(--rule);
+  background: transparent;
+  padding: var(--s1) var(--s2);
+  font-size: 12px;
+}
+
+.tag.artist { --tag-color: #e3b34c; color: var(--tag-color); border-color: rgba(227, 179, 76, .45); }
+.tag.group { --tag-color: #d9c27e; color: var(--tag-color); border-color: rgba(217, 194, 126, .4); }
+.tag.series { --tag-color: #8fb8dd; color: var(--tag-color); border-color: rgba(143, 184, 221, .4); }
+.tag.character { --tag-color: #4cc9ad; color: var(--tag-color); border-color: rgba(76, 201, 173, .4); }
+.tag.male { --tag-color: #7fb0e0; color: var(--tag-color); border-color: rgba(127, 176, 224, .4); }
+.tag.female { --tag-color: #e08aa8; color: var(--tag-color); border-color: rgba(224, 138, 168, .4); }
+
+.tag:hover { border-color: var(--nail); color: var(--nail); }
+
+/* ダウンロードの控え室はブラウザの流儀で、ツールバーの釦の真下に吊るす。
+   下いっぱいに広げると一覧の札を隠すので、右上の小窓に畳んでおく */
+.queue {
+  position: fixed;
+  top: calc(var(--rail-h) + 8px);
+  right: 22px;
+  width: min(380px, calc(100vw - 44px));
+  max-height: min(480px, calc(100vh - var(--rail-h) - 40px));
+  overflow: auto;
+  background: #121821;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  z-index: 25;
+  box-shadow: var(--shadow);
+  padding: var(--s3);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: right var(--t-base) ease, opacity var(--t-fast) ease, transform var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.queue[hidden] {
+  display: block;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.queue header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 幅 380px に題と釦 3 つは収まらないことがある: 折り返して逃がす */
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+}
+
+.queue h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+.queue-tools {
+  display: flex;
+  gap: var(--s1);
+}
+
+/* 頭の釦は絵だけで言う: 箱 (枠と地) は付けない (2026-08-26 利用者指定) */
+.queue-tools .iconbtn {
+  border: 0;
+  background: transparent;
+}
+
+.dest-path {
+  margin: var(--s1) 0 var(--s2);
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.queue-section[hidden] { display: none; }
+
+.queue-section + .queue-section {
+  margin-top: var(--s3);
+}
+
+.queue-head {
+  margin: 0 0 var(--s2);
+  color: var(--dust);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.queue-num {
+  font-family: var(--mono);
+  color: var(--paper);
+}
+
+#jobs,
+#jobs-done {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+.job {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s1) var(--s3);
+}
+
+.job strong {
+  font-size: 13px;
+  /* 小窓に移したので、長い題は行を太らせず省略で切る */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job .meta {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  background: #243040;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--jade);
+  width: 0;
+  transition: width var(--t-base) ease;
+}
+
+.job.done .bar > span { background: var(--nail); }
+.job.error .bar > span { background: var(--stamp); }
+
+.job.error {
+  border-left: 2px solid var(--stamp);
+  padding-left: var(--s2);
+}
+
+.job-error {
+  grid-column: 1 / -1;
+  color: var(--stamp);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+/* 釦は全部アイコンだけ (Edge の一覧に寄せる)。言葉は title に預ける */
+.job-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--dust);
+  font-size: 12px;
+  padding: 0;
+}
+
+.job-actions .job-icon {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  padding: var(--s1);
+}
+
+.job-actions .job-icon svg { display: block; }
+
+.job-actions button:hover { color: var(--nail); }
+
+/* まだ使えない釦は消さずに退かせる。取り込みが済んだ瞬間に釦が増えると
+   行が横へずれる (控え室を目で追っている最中はそれが一番うるさい) */
+.job-actions button[disabled] {
+  color: var(--rule);
+  cursor: default;
+}
+
+.job-actions button[disabled]:hover { color: var(--rule); }
+
+.loupe {
+  border-radius: var(--r-panel);
+  position: fixed;
+  z-index: 40;
+  width: min(380px, 44vw);
+  pointer-events: auto;
+  background: #0e131b;
+  border: 1px solid var(--nail);
+  box-shadow: var(--shadow);
+  padding: var(--s2);
+  display: flex;
+  flex-direction: column;
+  max-height: min(78vh, 860px);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.loupe[hidden] {
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.loupe-pages {
+  overflow: hidden;
+  background: #080b10;
+}
+
+.loupe-pages img {
+  width: 100%;
+  max-height: min(68vh, 760px);
+  display: block;
+  object-fit: contain;
+}
+
+.loupe-caption {
+  margin: var(--s2) var(--s1) 0;
+  font-size: 13px;
+}
+
+.loupe-caption small {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--dust);
+  font-family: var(--mono);
+}
+
+/* 読む画面の間は後ろを止める。止めるとスクロールバーが消えて棚の幅が変わるので、消えた幅 (reader.js が測る)
+   だけ右に余白を足して幅を保つ: 開く・閉じるたびに後ろの流しが組み直されていた */
+body.reader-open { overflow: hidden; padding-right: var(--reader-scrollbar-gap, 0px); }
+
+.reader {
+  position: fixed;
+  inset: 0;
+  background: #07090d;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.reader[hidden] {
+  display: grid;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.reader-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: center;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid #1c2430;
+}
+
+/* 題と★をひとまとめに: ★は右端ではなく、題の切れ目のすぐ隣に付いて回る */
+.reader-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.reader-heading p {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 読みながら付ける Eagle の★。撫でると仮に灯り、押すと書き込む。
+   釦の枠も背景も描かず、星の形だけを置く */
+.reader-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+}
+
+.reader-stars[hidden] { display: none; }
+
+/* .reader-bar button の枠と背景 (--shelf) に勝つため、親を添えて書く。
+   釦の体は消して星の形だけを残し、文字の天地中央に星の中心を合わせる */
+.reader-bar .rstar {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+  transition: transform var(--t-fast) ease;
+}
+
+.reader-bar .rstar svg { display: block; }
+
+/* 消灯は輪郭線だけ、点灯で金に塗る */
+.reader-bar .rstar svg path {
+  fill: none;
+  stroke: #5a6578;
+  stroke-width: 1.6;
+  transition: fill var(--t-fast) ease, stroke var(--t-fast) ease;
+}
+
+.reader-bar .rstar.on svg path {
+  fill: var(--nail);
+  stroke: var(--nail);
+}
+
+/* 題の文字のx高さに対して星が浮いて見えるぶんの微調整 */
+.reader-stars { margin-top: 2px; }
+
+/* .reader-bar button:active の「1px 沈む」より強い指定で、星は縮む動きに揃える */
+.reader-bar .rstar.on { color: var(--nail); }
+.reader-bar .rstar:hover { transform: scale(1.25); }
+.reader-bar .rstar:active { transform: scale(.95); }
+
+.reader-bar p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1);
+  font-family: var(--mono);
+}
+
+.reader-tools .sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--rule);
+}
+
+.reader-bar .rbtn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  color: var(--paper);
+}
+
+.reader-bar .rbtn[hidden] { display: none; }
+
+.reader-bar .rbtn svg { display: block; }
+
+.reader-bar .rbtn:hover {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+.reader-bar .rbtn.active {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+#reader-page {
+  margin-left: var(--s1);
+  color: var(--dust);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#reader-page:hover {
+  color: var(--nail);
+}
+
+.reader-page-input {
+  width: 72px;
+  margin-left: var(--s1);
+  padding: 2px var(--s1);
+  background: var(--shelf);
+  border: 1px solid var(--nail);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.reader-page-input[hidden] { display: none; }
+
+.reader-body {
+  position: relative;
+  min-height: 0;
+}
+
+#reader-stage {
+  margin: 0;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+}
+
+.reader-pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  height: 100%;
+  width: 100%;
+  /* ズームの不動点計算は原点が左上である前提で立てている */
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.reader.is-zoomed .reader-pages {
+  cursor: grab;
+}
+
+.reader.is-zoomed .reader-pages:active {
+  cursor: grabbing;
+}
+
+.reader.is-rtl.is-spread .reader-pages {
+  flex-direction: row-reverse;
+}
+
+.reader-page-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  flex: 0 1 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.reader-page-slot[hidden] { display: none; }
+
+.reader.is-spread .reader-page-slot {
+  width: 50%;
+  flex-basis: 50%;
+  max-width: 50%;
+}
+
+.reader.is-spread .reader-page-slot:first-child { justify-content: flex-end; }
+.reader.is-spread .reader-page-slot:last-child { justify-content: flex-start; }
+.reader.is-rtl.is-spread .reader-page-slot:first-child { justify-content: flex-start; }
+.reader.is-rtl.is-spread .reader-page-slot:last-child { justify-content: flex-end; }
+
+.reader.fit-width .reader-page-slot {
+  height: auto;
+}
+
+.reader.fit-width .reader-page-slot:has(.reader-page-status:not(:empty)) {
+  min-height: min(60vh, 520px);
+}
+
+#reader-image,
+#reader-image2 {
+  display: block;
+}
+
+#reader-image2[hidden] { display: none; }
+
+/* fit-縦 (contain): fill the viewport height, upscaling small pages;
+   ultra-wide pages letterbox inside the box instead of overflowing. */
+.reader:not(.fit-width) #reader-stage {
+  overflow: hidden;
+}
+
+.reader:not(.fit-width) #reader-image,
+.reader:not(.fit-width) #reader-image2 {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.reader-page-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .08em;
+  pointer-events: none;
+}
+
+.reader-page-status:empty { display: none; }
+
+.reader-page-status button,
+#reader-cancel {
+  pointer-events: auto;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: var(--s1) var(--s2);
+  background: var(--shelf);
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reader-page-status button { margin-left: var(--s2); }
+
+.reader:not(.fit-width).is-spread #reader-image,
+.reader:not(.fit-width).is-spread #reader-image2 {
+  max-width: 100%;
+}
+
+/* 頁の入れ替え。送る前の絵をそのままの位置に重ね、新しい頁が出てから透かして消す */
+.reader-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 1;
+  /* **三段の札に乗せない。** 頁の送りの交差薄れで、reader.js の FADE_MS と対。
+     JS はこの長さ + 40ms で影を外すので、ここだけ長くすると薄れ切る前に
+     引き剥がされて送りが弾む。隣の .reader-next の 60ms とも揃えてある。
+     変えるときは reader.js:505 の FADE_MS も同じ値にすること
+     (test/cross-source.test.js が食い違いを捕まえる) */
+  transition: opacity 60ms linear;
+}
+
+.reader-ghost.is-out { opacity: 0; }
+
+.reader-ghost img {
+  position: absolute;
+  display: block;
+  object-fit: contain;
+}
+
+.reader-loading {
+  position: absolute;
+  color: var(--dust);
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
+}
+
+.reader-loading.is-hidden { display: none; }
+
+.reader-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--s1) var(--s3);
+  background: rgba(7, 9, 13, .88);
+  border: 1px solid var(--rule);
+  color: var(--dust);
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 3;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  transition: opacity var(--t-slow) ease, visibility 0s linear 0s;
+}
+
+.reader-hint[hidden] {
+  display: block;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t-slow) ease, visibility 0s linear var(--t-slow);
+}
+
+/* 作品の継ぎ目。舞台の黒をそのまま敷いて、入力は下の頁と 前へ/次へ に通す */
+/* display: flex が hidden 属性の display: none に勝ってしまう: 明示して閉まるようにする。
+   !important なのは、関連作品つきの変種 (.with-related の display: grid) が同じ強さで後に書かれ、
+   hidden を立てても黒い幕が頁の上に残ったため (test/css-hidden.test.js) */
+.reader-boundary[hidden] { display: none !important; }
+
+.reader-boundary {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #07090d;
+  pointer-events: none;
+}
+
+.reader-next {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  max-width: 70%;
+  /* 札も頁と同じ間合いで浮かす。畳むのは hidden の仕事なので出るときだけ */
+  animation: reader-fade 60ms linear;
+}
+
+@keyframes reader-fade {
+  from { opacity: 0; }
+}
+
+.reader-next-cover {
+  flex: 0 0 auto;
+  height: 180px;
+  width: auto;
+  border: 1px solid var(--rule);
+  object-fit: contain;
+}
+
+.reader-next-text {
+  min-width: 0;
+}
+
+.reader-next-text p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader-next-text p + p { margin-top: var(--s2); }
+
+.reader-next-kicker {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.reader-next-title {
+  color: var(--paper);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.reader-next-creator {
+  color: var(--dust);
+  font-size: 13px;
+}
+
+.reader-next-star {
+  color: var(--nail);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* 継ぎ目に関連作品 (pixiv) を重ねる: 分かれ道 (2026-09-27、docs/ui-reader-next-2026-09-27.md)。
+   送る側の 1/3 に次の作品 (大きく)、細い縦の線、残りの 2/3 に関連の格子。
+   送る側は綴じで替わる: 右綴じは左、左綴じは右。
+   格子は後から届いても札を押しのけない: 欄が別なので、次の札の位置は届く前と後で変わらない (ガタつかない)。
+   行は minmax(0, 1fr) で場に留める (auto だと格子が伸びて巻けない。巻くのは .reader-related) */
+.reader-boundary.with-related {
+  display: grid;
+  grid-template-columns: minmax(0, 36fr) 1px minmax(0, 64fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "go rule wander";
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.reader:not(.is-rtl) .reader-boundary.with-related {
+  grid-template-columns: minmax(0, 64fr) 1px minmax(0, 36fr);
+  grid-template-areas: "wander rule go";
+}
+
+/* 上の display: grid は .reader-boundary[hidden] と同じ強さで後に書いてあるので、畳んだ幕まで出してしまう
+   (空の黒い幕が頁の上に居座る。2026-09-27 に配った版で起きた)。畳んだ時は必ず消す */
+.reader-boundary.with-related[hidden] { display: none; }
+
+/* 次の作品: 押せるのは札そのものだけ (欄の空きは押せない)。表紙は窓の高さに合わせて大きく */
+.reader-boundary.with-related .reader-next {
+  grid-area: go;
+  align-self: center;
+  justify-self: center;
+  flex-direction: column;
+  gap: var(--s3);
+  max-width: calc(100% - 2 * var(--s6));
+  text-align: center;
+}
+
+.reader-boundary.with-related .reader-next-cover {
+  height: min(52vh, 560px);
+  max-width: 100%;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+}
+
+.reader-boundary.with-related .reader-next-text { max-width: 100%; }
+.reader-boundary.with-related .reader-next-text p + p { margin-top: var(--s1); }
+
+/* 題は三行まで (一行に切ると長い題が読めない) */
+.reader-boundary.with-related .reader-next-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-family: var(--mincho);
+  font-size: 19px;
+}
+
+.reader-boundary.with-related .reader-next-creator { margin-inline: auto; text-align: center; }
+
+.reader-related-rule {
+  grid-area: rule;
+  width: 1px;
+  margin: var(--s6) 0;
+  background: var(--rule);
+  opacity: .7;
+}
+
+/* 関連の格子: ホイールで巻く (reader.js が scrollTop を動かす)。棒は巻いている間だけ右に薄く出す。
+   上の空きは巻く箱の外 (margin) に置く: 箱の中 (padding) に置くと、見出しがその下に張り付き、
+   見出しより上の空きを表紙が流れて見える */
+.reader-related {
+  grid-area: wander;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  margin-top: var(--s6);
+  padding: 0 48px var(--s5);
+  animation: reader-fade 60ms linear;
+}
+
+/* 次の作品が無い時 (関連から渡った作品・一覧の終わり): 関連の格子が場を全部使う。
+   関連から関連へ辿る間はこの姿 (次の札の欄を空けたままにしない) */
+.reader-boundary.with-related .reader-related:first-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 100%;
+  max-width: 1360px;
+  padding: 0 72px var(--s5);
+}
+
+.reader-related::-webkit-scrollbar { width: 8px; }
+.reader-related::-webkit-scrollbar-track { background: transparent; }
+.reader-related::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: transparent;
+  transition: background var(--t-slow) ease;
+}
+.reader-related.is-scrolling::-webkit-scrollbar-thumb { background: rgba(239, 232, 216, .22); }
+
+/* 見出しは巻いても残る (格子の上に敷く)。張り付く位置を箱の上端より 4px 上にして、地を上端の外まで伸ばす:
+   ちょうど上端に張ると、端数の位置 (滑りの途中・画面の拡大率) で表紙の縁が見出しの上に一画素の線で覗く */
+.reader-related-head {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  margin: 0;
+  padding: 4px 0 var(--s3);
+  background: #07090d;
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+.reader-related-note {
+  margin: 0;
+  color: var(--dust);
+  font-size: 13px;
+}
+
+.reader-related-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s5) var(--s4);
+  padding-right: var(--s2);
+}
+
+/* 押して進む: 次の札・関連の札・作者名だけが入力を取る。格子の隙間は下の頁に通す
+   (関連が出ている間は頁を押しても渡らない: reader.js の onClick) */
+.reader-next[data-next] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.reader-next[data-next]:hover .reader-next-cover { border-color: var(--nail); }
+
+.reader-next[data-next]:focus-visible { outline: 2px solid var(--nail); outline-offset: 6px; }
+
+.reader-related-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  overflow: hidden;   /* 題も作者名も札の幅から出ない (隣の札に被らない) */
+}
+
+.reader-related-work {
+  pointer-events: auto;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--paper);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 作者名: 押すとその作者の一覧へ。文字のままの時 (渡す口が無い) は p */
+.reader-creator-link {
+  pointer-events: auto;
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--t-fast) ease;
+}
+
+.reader-creator-link:hover,
+.reader-creator-link:focus-visible { color: var(--paper); text-decoration: underline; text-underline-offset: 3px; }
+
+/* isolation: 表紙の上の印 (頁数の札は z-index 3) を表紙の中に閉じ込める。閉じないと、巻いた時に
+   見出し (z-index 1) の上へ印だけが浮いて出る */
+.reader-related-cover {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  background: #11151d;
+}
+
+.reader-related-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--t-slow) ease;
+}
+
+.reader-related-work:hover .reader-related-cover img,
+.reader-related-work:focus-visible .reader-related-cover img { transform: scale(1.04); }
+
+.reader-related-work:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 8px; }
+
+/* 済 は頁数の札 (右上) と重ねない: 左上へ */
+.reader-related-cover .owned-mark { top: 6px; left: 6px; right: auto; }
+
+/* 題と作者名は一行に切る。block + 幅 100% で、釦の中でも確かに省略記号が効く */
+.reader-related-title,
+.reader-related-creator {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-related-title {
+  margin-top: var(--s1);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.reader-related-creator {
+  color: var(--dust);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* 次の作品が無い時の格子は場の全幅なので 5 列 */
+.reader-related:first-child .reader-related-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* 背の低い窓: 表紙を少し小さく、上の余白を詰めて格子の二段目を見せる */
+@media (max-height: 860px) {
+  .reader-boundary.with-related .reader-next-cover { height: min(48vh, 560px); }
+  .reader-related { margin-top: var(--s5); }
+}
+
+@media (max-width: 1100px) {
+  .reader-related { padding-left: var(--s5); padding-right: var(--s5); }
+  .reader-boundary.with-related .reader-related:first-child { padding-left: var(--s6); padding-right: var(--s6); }
+  .reader-related-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .reader-related:first-child .reader-related-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.nav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18%;
+  border: 0;
+  background: transparent;
+  color: var(--dust);
+  opacity: .25;
+  transition: opacity var(--t-fast);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+}
+
+.nav svg {
+  display: block;
+  width: 36px;
+  height: 36px;
+}
+
+.nav:hover { opacity: .9; }
+
+.nav:hover { background: linear-gradient(90deg, rgba(255,255,255,0.03), transparent); }
+.nav.next { right: 0; }
+.nav.next:hover { background: linear-gradient(270deg, rgba(255,255,255,0.03), transparent); }
+.nav.prev { left: 0; }
+
+#reader-seek {
+  -webkit-appearance: none;
+  width: calc(100% - 28px);
+  margin: var(--s1) 14px var(--s2);
+  height: 3px;
+  background: rgba(239, 232, 216, 0.15);
+  opacity: 0.35;
+  transition: opacity var(--t-fast);
+  outline: none;
+  accent-color: var(--nail);
+}
+
+#reader-seek:hover,
+#reader-seek:focus-visible {
+  opacity: 0.9;
+}
+
+#reader-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  background: var(--nail);
+  border: 0;
+}
+
+.reader.is-rtl #reader-seek {
+  direction: rtl;
+}
+
+.reader.fit-width #reader-stage {
+  overflow-y: auto;
+}
+
+.reader.fit-width .reader-pages {
+  align-items: flex-start;
+  height: auto;
+}
+
+.reader.fit-width #reader-image,
+.reader.fit-width #reader-image2 {
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: auto;
+}
+
+.reader.fit-width.is-spread #reader-image,
+.reader.fit-width.is-spread #reader-image2 {
+  width: 100%;
+}
+
+.reader-thumbs {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  padding: var(--s4);
+  background: rgba(7, 9, 13, 0.94);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.reader-thumbs[hidden] {
+  display: block;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.reader-thumbs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--s2);
+}
+
+.reader-thumb {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: var(--cabinet);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.reader-thumb img {
+  display: block;
+  width: 100%;
+  height: 168px;
+  object-fit: contain;
+  background: var(--night);
+}
+
+.reader-thumb span {
+  display: block;
+  padding: var(--s1) 0;
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.reader-thumb:hover {
+  border-color: var(--nail);
+}
+
+.reader-thumb.current {
+  border-color: var(--nail);
+}
+
+.reader-thumb.current span {
+  color: var(--nail);
+}
+
+.settings,
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(7, 9, 13, .6);
+  display: grid;
+  place-items: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-fast) ease, visibility 0s linear 0s;
+}
+
+.help {
+  z-index: 56;
+  background: rgba(7, 9, 13, .88);
+}
+
+/* ヘルプはリーダーのサムネイル一覧 (60) の上にも出す。
+   リーダー内で t → ? と押したとき、見えないヘルプに Esc を吸われないため */
+.help {
+  z-index: 65;
+}
+
+.settings[hidden],
+.help[hidden] {
+  display: grid;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast);
+}
+
+.settings-panel,
+.help-panel {
+  position: relative;
+  width: min(520px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow);
+  padding: var(--s4) var(--s5) var(--s5);
+  transform: scale(1);
+  /* 開く時だけ少し弾む。閉じは .14s の素直な縮みのまま */
+  transition: transform var(--t-base) cubic-bezier(.2, .9, .25, 1.2);
+}
+
+.help-panel {
+  width: min(640px, 92vw);
+}
+
+/* the left rail costs width: give the rows back the room they had */
+.settings-panel {
+  width: min(660px, 94vw);
+  overflow: hidden;
+}
+
+.settings[hidden] .settings-panel,
+.help[hidden] .help-panel {
+  transform: scale(.96);
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: var(--s3);
+  margin-bottom: var(--s1);
+}
+
+.settings-panel h2,
+.help-panel h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: .12em;
+  color: var(--nail);
+}
+
+/* 枠が消えた分だけ外へ寄せ、×の線が見出しの右端と揃うようにする */
+.settings-head .icon-close {
+  position: static;
+  margin-right: -6px;
+}
+
+/* two panes: a quiet list of drawers on the left, one drawer's contents on the right */
+.settings-body {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 0 var(--s4);
+  height: 400px;
+  max-height: calc(88vh - 96px);
+  margin-top: var(--s2);
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: var(--s3);
+  border-right: 1px solid var(--rule);
+  overflow: auto;
+}
+
+.settings-tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: var(--s2);
+  text-align: left;
+  color: var(--dust);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: color var(--t-fast) ease, background var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.settings-tab:hover {
+  color: var(--paper);
+  background: rgba(255, 255, 255, .03);
+}
+
+.settings-tab.active {
+  color: var(--nail);
+  background: rgba(255, 255, 255, .05);
+  border-left-color: var(--nail);
+}
+
+.settings-tab:focus-visible {
+  outline: none;
+  color: var(--nail);
+}
+
+.settings-pane {
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* スクロールバーが右端の値やスイッチに重ならないよう、バー幅ぶんの余白を確保する */
+  padding-right: var(--s3);
+}
+
+.settings-tabpanel[hidden] { display: none; }
+
+/* each panel restarts the row rhythm: the last rule in a panel is redundant */
+.settings-tabpanel > .set-row:last-child { border-bottom: 0; }
+.settings-tabpanel > .set-row:first-child { padding-top: var(--s1); }
+
+.set-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  gap: var(--s1) var(--s3);
+  align-items: center;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+  transition: background var(--t-fast) ease;
+}
+
+.set-row:hover {
+  background: rgba(255, 255, 255, .02);
+}
+
+.set-row:last-child { border-bottom: 0; }
+
+.set-label {
+  grid-column: 1;
+  color: var(--dust);
+  font-size: 12px;
+}
+
+.set-value {
+  grid-column: 2;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.set-acts {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.set-owned {
+  color: var(--dust);
+  font-size: 12px;
+}
+
+.set-hint {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  color: var(--dust);
+  font-size: 11px;
+}
+
+/* 行の真ん中に常に見せる説明。値 (mono) と違って地の文で言う */
+.set-desc {
+  font-family: var(--font);
+  color: var(--dust);
+  font-size: 11px;
+}
+
+/* 文字付きスイッチ: 状態を言葉と玉の位置の両方で言う */
+.set-switch {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--cabinet);
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+  color: var(--dust);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--t-base) ease, color var(--t-base) ease, background var(--t-base) ease;
+}
+
+.set-switch:hover { border-color: var(--nail); }
+
+.set-switch-knob {
+  position: relative;
+  width: 28px;
+  height: 15px;
+  border-radius: var(--r-pill);
+  background: #243040;
+  transition: background var(--t-base) ease;
+}
+
+.set-switch-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--dust);
+  transition: transform var(--t-base) cubic-bezier(.2, .8, .3, 1.3), background var(--t-base) ease;
+}
+
+.set-switch.active { color: var(--jade); border-color: rgba(110, 190, 150, .45); }
+.set-switch.active .set-switch-knob { background: rgba(110, 190, 150, .25); }
+.set-switch.active .set-switch-knob::after { transform: translateX(13px); background: var(--jade); }
+
+/* 抽斗を開けた時の入り: 中身が下からわずかに追いかけて並ぶ */
+.settings-tabpanel:not([hidden]) > * {
+  animation: set-row-in .26s cubic-bezier(.2, .7, .3, 1) backwards;
+}
+
+.settings-tabpanel:not([hidden]) > *:nth-child(2) { animation-delay: .025s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(3) { animation-delay: .05s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(4) { animation-delay: .075s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(5) { animation-delay: .1s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(6) { animation-delay: .125s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(7) { animation-delay: .15s; }
+.settings-tabpanel:not([hidden]) > *:nth-child(n+8) { animation-delay: .175s; }
+
+@keyframes set-row-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-tabpanel:not([hidden]) > * { animation: none; }
+}
+
+/* 取得済み再保存などの確認窓。OS の confirm と違い、裏の描画を止めない */
+.confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(7, 9, 13, .55);
+  display: grid;
+  place-items: center;
+}
+
+.confirm-panel {
+  border-radius: var(--r-panel);
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+  padding: var(--s4);
+  width: min(400px, 90vw);
+}
+
+.confirm-text {
+  margin: 0 0 var(--s3);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-all;
+  white-space: pre-line; /* 削除確認など、二行に分けた文をそのまま出す */
+}
+
+.confirm-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.confirm-ok {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+/* 取得の進み: ジョブの帯より細く、行の下に敷くだけ */
+.set-bar {
+  grid-column: 2 / -1;
+  height: 3px;
+  margin-top: var(--s1);
+  background: #243040;
+}
+
+.set-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--jade);
+  transition: width var(--t-base) ease;
+}
+
+.set-acts input[type="number"] {
+  width: 70px;
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  padding: var(--s1) var(--s2);
+}
+
+.set-acts input[type="number"]:focus,
+.set-acts select:focus {
+  outline: none;
+  border-color: var(--nail);
+}
+
+.set-acts input[type="number"]:hover,
+.set-acts select:hover {
+  border-color: var(--nail);
+  color: var(--nail);
+}
+
+/* a drawer label between rows: the modal is long enough to want dividers */
+/* the row above already draws the rule: this only needs air and a small voice */
+/* 先頭の小見出しだけ詰める (下の .set-group より後勝ちになるよう二重指定) */
+.set-group.set-group-first { margin-top: var(--s1); }
+
+.set-group {
+  margin: var(--s4) 0 0;
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+}
+
+.set-group + .set-row { padding-top: var(--s2); }
+
+/* QR は白地のまま置く: 暗い panel に馴染ませようと色を変えると読み取りが落ちる */
+.set-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.set-qr[hidden] { display: none; }
+
+.set-qr img {
+  background: #fff;
+  border-radius: 6px;
+  display: block;
+}
+
+.set-qr span {
+  color: var(--dust);
+  font-family: var(--font);
+  font-size: 11px;
+}
+
+/* 設定の末尾に置く但し書き。行として並ばず、段落として読ませる */
+.set-note {
+  margin: var(--s3) 0 0;
+  color: var(--dust);
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.set-acts select {
+  width: 136px;
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  padding: var(--s1) var(--s2);
+  font-size: 12px;
+}
+
+/* 札が文そのものになる行 (真ん中に説明を置かず、下の一行で補う)。
+   札に幅を全部渡して、長い名乗りでも折り返さないようにする */
+.set-row.set-say { grid-template-columns: minmax(0, 1fr) auto; }
+.set-row.set-say .set-acts { grid-column: 2; }
+.set-row.set-say .set-hint { grid-column: 1 / -1; }
+
+/* 左・右・ダブルを一行に。選び札は等分にして、名乗りの長さで行が崩れないようにする */
+.set-row.set-mouse { grid-template-columns: 140px minmax(0, 1fr); }
+
+.set-row.set-mouse .set-acts {
+  grid-column: 2;
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s1);
+}
+
+.set-pick { display: grid; gap: var(--s1); min-width: 0; }
+.set-pick > span { color: var(--dust); font-size: 11px; }
+.set-row.set-mouse .set-acts select { width: 100%; }
+
+/* 抽斗の底に畳んでおく「詳細」。開いても上の行は動かない: 下へ伸びるだけで、
+   伸びた分は .settings-pane (高さの決まった .settings-body の中) が自分で巻き取る */
+.set-more > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--s3) 0;
+  color: var(--dust);
+  font-size: 12px;
+  letter-spacing: .04em;
+  user-select: none;
+}
+
+.set-more > summary::-webkit-details-marker { display: none; }
+
+.set-more > summary::after {
+  content: '›';
+  display: inline-block;
+  margin-left: var(--s1);
+  transition: transform var(--t-fast) ease;
+}
+
+.set-more[open] > summary::after { transform: rotate(90deg); }
+
+.set-more > summary:hover,
+.set-more > summary:focus-visible { color: var(--nail); outline: none; }
+
+.set-more > .set-row:first-of-type { padding-top: 0; }
+
+.help-body {
+  display: grid;
+  gap: var(--s4);
+  padding-top: var(--s3);
+}
+
+.help-group h3 {
+  margin: 0 0 var(--s2);
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+}
+
+.help-rows {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s1) var(--s4);
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12px;
+  color: var(--paper);
+}
+
+kbd {
+  border: 1px solid var(--rule);
+  color: var(--nail);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px var(--s1);
+  line-height: 1.6;
+  background: var(--shelf);
+}
+
+.toasts {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--s2);
+  pointer-events: none;
+}
+
+.toast {
+  border-radius: var(--r-panel);
+  pointer-events: auto;
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--nail);
+  padding: var(--s2) var(--s3);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  max-width: 360px;
+  word-break: break-word;
+  cursor: pointer;
+  animation: toast-in .16s ease-out;
+}
+
+.toast.success { border-left-color: var(--jade); }
+.toast.error { border-left-color: var(--stamp); }
+
+.toast.is-leaving {
+  opacity: 0;
+  transition: opacity var(--t-base) ease;
+}
+
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* 窓が狭くなったら、崩す前にまず縮める。
+   帯の並び (匣 | 検索 | 設定・ダウンロード) は最後まで一行に保つ */
+
+/* 詳細を開くと横幅は実質この分だけ減る: パネルを先に細くする */
+@media (max-width: 1200px) {
+  :root { --detail-w: 380px; }
+}
+
+/* 銘は絵だけ残して字を畳む。検索窓に 130px ほど返す */
+@media (max-width: 1040px) {
+  .brand { min-width: 0; }
+  .brand-text { display: none; }
+  .rail { gap: var(--s3); }
+}
+
+/* サイト選びと検索窓をさらに詰める。ここまでは一行のまま */
+@media (max-width: 900px) {
+  :root { --src-w: 5.5rem; --detail-w: min(340px, 46vw); }
+  .rail { padding: var(--s3) var(--s3) var(--s2); gap: var(--s2); }
+  .search input { padding: var(--s3) var(--s2); }
+  .filters { padding-left: var(--s3); padding-right: var(--s3); }
+  /* 細くなったパネルでも 読む / Eagle / サイト は一行に収める */
+  .detail { padding-left: var(--s4); padding-right: var(--s4); }
+  .detail-actions { gap: var(--s1); }
+  .detail-actions button { padding: var(--s2); }
+}
+
+/* ここから先は一行に収まらない: 意図した二段に落とす
+   (検索を上、銘と釦を下。釦は右端に残す) */
+@media (max-width: 680px) {
+  .rail {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "brand actions" "search search";
+    gap: var(--s2) var(--s3);
+  }
+  .brand { grid-area: brand; }
+  .search { grid-area: search; }
+  .rail-actions { grid-area: actions; justify-content: flex-end; }
+  .zoom-ctrl { margin-left: 0; }
+  :root { --detail-w: 100vw; }
+  body.detail-open .workspace,
+  body.detail-open .filters {
+    margin-right: 0;
+  }
+  body.detail-open #queue { right: 22px; }
+}
+
+/* pawchive の手動紐付け。鎖は所持していない札にだけ出る控えめな一手 */
+.card-act.paw-link,
+.card-act.paw-folder { opacity: .55; }
+
+.card-act.paw-link:hover,
+.card-act.paw-folder:hover { opacity: 1; }
+
+.card-act.paw-link.is-on { opacity: 1; color: var(--jade); }
+
+/* 対応フォルダが決まっている作者の印。★ の左に並ぶ */
+.folder-mark {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  padding: 2px var(--s1);
+  background: rgba(12, 16, 22, .82);
+  border: 1px solid var(--rule);
+  color: var(--dust);
+  line-height: 0;
+}
+
+.folder-mark[hidden] { display: none; }
+.folder-mark svg { display: block; }
+/* 推測どまりは輪郭だけ、決めたものは字を起こす */
+.folder-mark:not(.is-guess) { color: var(--jade); }
+
+.paw-link-panel { width: min(560px, 92vw); }
+
+.paw-link-note {
+  margin: var(--s2) 0 var(--s3);
+  color: var(--dust);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.paw-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+  font-size: 12px;
+}
+
+.paw-line-label {
+  color: var(--dust);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.paw-line-value { color: var(--paper); }
+.paw-line-value.is-empty { color: var(--dust); }
+
+.paw-hits { max-height: min(52vh, 420px); }
+
+.paw-hit {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.paw-hit-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paw-query { margin: 0 0 var(--s2); }
+
+/* 候補の持ち主。別の作者のフォルダから来たものだけ色を起こす */
+.paw-owner {
+  flex: none;
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dust);
+}
+
+.paw-owner.is-other { color: var(--nail); }
+
+.paw-star,
+.paw-count,
+.paw-used {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dust);
+}
+
+.paw-star { color: var(--nail); }
+
+/* 既に別の投稿と結ばれている札は選べるが、目では後ろに退かせる */
+.paw-hit.is-used .paw-hit-name { color: var(--dust); }
+
+.paw-hit.is-current {
+  color: var(--jade);
+  border-left: 2px solid var(--jade);
+  padding-left: var(--s1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 窓が狭いときの 6c: 三列を保てないので、検索を二段目へ降ろす */
+@media (max-width: 960px) {
+  .rail {
+    grid-template-columns: 1fr auto;
+    gap: var(--s2) var(--s4);
+  }
+  .rail-left { grid-column: 1; grid-row: 1; }
+  .rail-actions { grid-column: 2; grid-row: 1; }
+  .search { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ---- 読み取り専用モード (--read-only) ---- */
+/* 書き込みに繋がる釦・欄はまとめて出さない。実際に塞ぐのは main 側の
+   IPC ガードで、ここは「押せないものを見せない」だけを受け持つ */
+body.read-only #btn-queue,
+body.read-only #queue,
+body.read-only #paw-bulk,
+body.read-only #paw-bulk-status,
+body.read-only .card-act[data-act="save"],
+body.read-only .card-act[data-act="paw-fav"],
+body.read-only .card-act[data-act="paw-folder"],
+body.read-only .card-act[data-act="paw-link"],
+body.read-only .detail-actions [data-save],
+body.read-only .detail-quiet,
+body.read-only .link-picker,
+body.read-only .detail-danger,
+body.read-only #reader-download,
+body.read-only #reader-stars,
+body.read-only #settings-tab-download,
+body.read-only .set-row:has(#set-auto-sync),
+body.read-only .set-row:has(#set-sync-homecore),
+body.read-only .set-row:has(#set-owned-confirm),
+body.read-only .set-row:has(#set-paw-bulk-dir),
+body.read-only .set-row:has(#set-paw-bulk-concurrency),
+body.read-only #settings-tab-library .set-more {
+  display: none !important;
+}
+
+/* Pixiv-style page count: shared by cards, details and related works. */
+.page-count-badge{position:absolute;top:4px;right:4px;z-index:3;display:inline-flex;align-items:center;gap:2px;padding:2px 5px;border-radius:999px;background:rgba(0,0,0,.36);color:#fff;font:600 11px/1.15 var(--font,sans-serif);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none;letter-spacing:0}
+.page-count-badge svg{display:block;width:12px;height:12px;flex:none}
+.page-count-badge>span{font:inherit;color:inherit;opacity:1}
+
+.detail-cover{position:relative;overflow:hidden}
+.detail-cover>img{display:block;width:100%;height:auto;max-height:inherit;object-fit:contain;border-radius:inherit}
+.pixiv-related-cover{position:relative;width:100%;overflow:hidden;border-radius:8px}
+.pixiv-related-cover>img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain}
+.pixiv-related-item .page-count-badge,.pixiv-related-item .page-count-badge>span{font-size:11px;opacity:1}
+.variant-cover{position:relative;display:block;flex:none}
+.variant-cover .page-count-badge{top:2px;right:2px;padding:2px 3px;gap:1px;font-size:10px}
+.variant-cover .page-count-badge svg{width:10px;height:10px}
+.cover>.star-mark,.card.owned .cover>.star-mark{top:auto;bottom:4px;left:auto;right:4px}
+.cover:has(.star-mark)>.owned-mark{top:34px}

@@ -1,0 +1,1301 @@
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 端末で読む画面の様式
+
+   色・比率・手ごたえは机上版 (src/renderer/styles.css) から持ち込む。
+   暗い匣に紙の文字、状態は真鍮でだけ言う、という約束は変えない。
+   ここは「暗い匣の中」を丸ごと写す面なので明暗の切替は持たない。
+   代わりに全ての色を明示して置く (host の地色を借りない)。
+
+   クラス名はモック (mock-src.html) のまま。中身を組む shelf.js / read.js が
+   同じ名前で DOM を作る。@font-face は /fonts.css が別に配る。
+   ─────────────────────────────────────────────────────────── */
+
+:root {
+  --night: #0c1016;
+  --cabinet: #141a22;
+  --shelf: #1b2230;
+  --card: #1f2734;
+  --rule: #2c3648;
+  --paper: #efe8d8;
+  --dust: #8a93a3;
+  --ink: #79aed4;
+  --nail: #c9a227;
+  --jade: #2fbfa0;
+  --stamp: #c14b3a;
+
+  --jp: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* 題字だけ顔を変える。iOS に Yu Mincho は無いので Hiragino Mincho が受ける */
+  --mincho: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
+
+  /* 動きの語彙。曲線は二つ、距離は 6〜10px、時間は三段だけに絞る。
+     種類を増やすほど、画面ごとに別のアプリのような手ざわりになる */
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);  /* 出入り: 速く出て、静かに止まる */
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);   /* 状態の移り変わり */
+  --t-fast: 160ms;
+  --t-base: 260ms;
+  --t-sheet: 400ms;
+
+  /* 額縁が無いぶん、寸法は端末の切り欠きから採る */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+/* 読む画面の錠。文書スクロールを止めるだけで、文書の丈は棚のまま保つ。
+   body を position:fixed で固定する錠だと文書が画面の丈まで縮み、iPhone の据え置き
+   (status bar を透かす全画面) では WebKit が fixed の基準を文書の矩形に閉じ込めるので、
+   読む画面が status bar のぶん (62px) 短く切れて下に棚の地色の帯が残った
+   (実測・調査 2026-09-11)。地色も読む画面の黒に替えておく: 万一まだ届かない端末でも
+   帯が黒になって見えなくなる */
+html.reading { overflow: hidden; overscroll-behavior: none; background: #05070a; }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* display を持つ要素は [hidden] だけでは消えない。骨組みの #drum/#sheet/#reader/#coach は
+   hidden で伏せてあるので、この打ち消しが無いと開く前から全部が重なって出る */
+[hidden] { display: none !important; }
+
+/* 指で送る場所に棒は要らない (実機の iOS も普段は出さない)。
+   Chromium は scrollbar-width を見ると ::-webkit-scrollbar を無効にするが、
+   ここはどちらの経路でも消したいので両方書く */
+::-webkit-scrollbar { display: none; width: 0; height: 0; }
+* { scrollbar-width: none; }
+
+/* 暗い一枚岩なので端末にそう宣言する。これが無いと、色を書き忘れた <button> や
+   <input> が UA の明るい既定 (buttonface) のまま出て、その上に紙色の字が載って読めなくなる */
+:root { color-scheme: dark; }
+
+html { height: 100%; }
+
+body {
+  margin: 0;
+  /* 文書そのものをスクロールさせる。内側の箱だけを送る組み方だと、iOS Safari が
+     「頁はスクロールしていない」と判じて下の帯を大きいまま畳まない (hitomi 等の
+     普通のサイトで帯が小さな錠剤に縮むのは、文書スクロールが合図だから)。
+     棚の頭は sticky、重ね物 (読む画面・紙・胴) は fixed で浮かせる */
+  min-height: 100vh;
+  min-height: 100dvh;
+  isolation: isolate;
+  overscroll-behavior: none;
+  background: var(--night);
+  color: var(--paper);
+  font-family: var(--jp);
+  letter-spacing: .01em;
+  background-image:
+    radial-gradient(900px 420px at 12% -8%, rgba(201,162,39,.07), transparent 55%),
+    radial-gradient(700px 500px at 100% 100%, rgba(121,174,212,.05), transparent 60%);
+}
+
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ── 画面の切り替え ─────────────────────────────────────
+
+   状態の札 (sheeted / drumOn / reading / chromeOn / prefsOn / coachOn) は
+   画面の親に着せる。実装では body、モックでは .screen だったので両方受ける。
+   胴の札は #drum に合わせた drumOn を正とし、モックの filtersOn も残す      */
+
+.view { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+/* 棚は文書の流れに置く (丈は本の数だけ伸びる)。紙が上に重なると暗くなる。
+   縮んで半歩下がる動きは、文書スクロールに変えた時に手放した — 丈が数千 px の
+   要素を scale すると、見ている場所ごと大きく流れてしまう */
+#shelf {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  z-index: 10;
+  transition: filter var(--t-sheet) var(--ease-out);
+}
+:is(body, .screen).sheeted #shelf,
+:is(body, .screen).drumOn #shelf,
+:is(body, .screen).filtersOn #shelf { filter: brightness(.62); }
+:is(body, .screen).reading #shelf { filter: brightness(.4); }
+
+/* ── 棚 ─────────────────────────────────────────────── */
+
+.shelfHead {
+  /* 貼り付けない。検索や絞りは棚の入り口に居れば足り、送れば普通に流れて
+     上がっていく (ずっと出ていても場所を食うだけ、という利用者判断) */
+  padding: calc(var(--safe-t) + 14px) 20px 10px;
+  background: linear-gradient(180deg, rgba(20,26,34,.98), rgba(20,26,34,.86));
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rule);
+  flex: none;
+}
+
+.shelfTop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+
+/* 机上版の帯の左肩と同じ紋章。匣に背表紙が並んだ印 + 文匣 / BUNKŌ の二段。
+   題字が明朝なのは机上版の指定どおり (ここだけ本文と顔を変えている) */
+.brand { display: flex; align-items: center; gap: 10px; }
+/* 机上版の SVG は 100x100 の枠の内側にしか絵が無く、そのまま置くと題字より
+   一回り低く見える。枠を絵の丈に切り直して題字と肩を揃える (viewBox は JS 側) */
+.brandMark { width: 33px; height: 31px; display: grid; place-items: center; color: var(--nail); flex: none; }
+.brandMark svg { width: 100%; height: 100%; display: block; }
+.brandText strong {
+  display: block; font-size: 15px; font-weight: 700; letter-spacing: .3em;
+  font-family: var(--mincho);
+}
+.brandText em {
+  display: block; font-style: normal; color: var(--dust);
+  font-family: var(--mono); font-size: 9px; letter-spacing: .32em; text-transform: uppercase;
+}
+.shelfRight { display: flex; align-items: center; gap: 10px; }
+.shelfCount { font-family: var(--mono); font-size: 11px; color: var(--dust); letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+
+.search {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--night);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 42px;
+  transition: border-color var(--t-fast) var(--ease-soft);
+}
+.search:focus-within { border-color: var(--nail); }
+.search svg { flex: none; color: var(--dust); }
+.search input {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--paper);
+  /* 16px を割ると iOS が焦点で画面を拡大する。15px は搭載幅では拡大の対象 */
+  font: inherit; font-size: 16px; outline: none; height: 100%;
+}
+.search input::placeholder { color: #5c6575; }
+.search input::-webkit-search-cancel-button { display: none; }
+
+/* 検索枠の右端。右手で持つ前提で、親指が最初に届くところに二つだけ置く。
+   既定から動かしている欄は真鍮に灯して、絞っていることを言う */
+.fieldBtn {
+  flex: none; width: 40px; height: 40px;
+  /* 釦の既定を一切持ち込ませない (2026-08-20)。
+     指定が無いと <button> は UA の padding (6px) を持ったままで、中身の箱は
+     32 - 12 = 20px になる。そこへ 17px の絵を grid で中央寄せしていたので、
+     揃うかどうかが「その版が push-button の釦に display:grid を効かせるか」
+     頼みになっていた。Chromium は揃うが、iPad の Safari で絵が薄い灯りから
+     横にずれる。padding を消し appearance も切って、寸法の変数を無くす */
+  padding: 0;
+  -webkit-appearance: none; appearance: none;
+  border: 0; background: transparent; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; color: var(--dust);
+  transition: color var(--t-fast) var(--ease-soft), background-color var(--t-fast) var(--ease-soft);
+}
+.fieldBtn:last-of-type { margin-right: -6px; }
+.fieldBtn.on { color: var(--nail); background: rgba(201,162,39,.12); }
+.fieldBtn:active { color: var(--paper); }
+.fieldBtn:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+.fieldBtn svg { display: block; }
+
+.shelfBody {
+  /* 自前ではスクロールしない。送るのは文書の仕事 (Safari の帯を畳ませる合図) */
+  flex: 1;
+  position: relative;   /* 引き直しの糸 (.pullLine) の座標の親 */
+  padding: 0 0 calc(var(--safe-b) + 26px);
+}
+
+.groupLabel {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .2em;
+  color: var(--dust); padding: 20px 20px 10px; display: flex; align-items: center; gap: 10px;
+}
+.groupLabel::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+/* display を持つ要素は [hidden] だけでは消えない (上の全体打ち消しと併せて二重に置く) */
+.groupLabel[hidden], .resume[hidden] { display: none; }
+
+/* 「すべて」の行は絞りと向きの席を兼ねる。罫は ::after ではなく実要素 (.ruleLine) —
+   向きの釦を罫の右に置くため (::after は常に最後に並ぶ) */
+.allHead::after { content: none; }
+.allHead .ruleLine {
+  flex: 1; height: 1px; background: var(--rule);
+  transition: background-color var(--t-fast) var(--ease-soft);
+}
+.groupTitle {
+  font: inherit; letter-spacing: inherit; color: inherit;
+  -webkit-appearance: none; appearance: none;
+  border: 0; background: transparent;
+  /* 10px の字のままでは指が外れる。行の丈を変えずに触れる範囲だけ広げる */
+  padding: 12px 8px; margin: -12px -8px;
+  transition: color var(--t-fast) var(--ease-soft);
+}
+.groupTitle:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+/* ★4 以上だけを見ている間は、名と罫が真鍮に灯る */
+.allHead.starred .groupTitle { color: var(--nail); }
+.allHead.starred .ruleLine { background: var(--nail); }
+.dirBtn {
+  /* 26px では指が外れる。.groupTitle と同じ手で、見た目の丈を変えずに
+     触れる範囲だけ広げる (margin は当たりを広げない。padding が広げる) */
+  flex: none; width: 26px; height: 26px;
+  padding: 9px; margin: -17px -9px;
+  box-sizing: content-box;
+  -webkit-appearance: none; appearance: none;
+  border: 0; background: transparent; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; color: var(--dust);
+  transition: color var(--t-fast) var(--ease-soft);
+}
+.dirBtn.on { color: var(--nail); }
+.dirBtn:active { color: var(--paper); }
+.dirBtn:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+.dirBtn svg { display: block; }
+
+/* 読みかけの帯: 横に流す。棚の格子とは別の運びにして、続きだと分かるように */
+.resume {
+  display: flex; gap: 12px; padding: 0 20px 4px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+}
+/* 帯は棚への入り口。棚の格子より一回り小さくして、主役を譲る */
+.resumeCard { width: 112px; flex: none; }
+
+/* 額縁が無いので列は幅に追随させる。104px を下限にすると、
+   狭い端末で 3 列・大きい端末で 4 列以上に自然に増える */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 18px 14px; padding: 4px 20px 0;
+}
+
+
+/* 棚の下に出るお知らせ (読み込み中… / 見つかりません / 母艦につながりません)。
+   様式が無いと UA 既定の 16px・左端揃えで、棚の 20px の版面から外れて出る */
+.note {
+  padding: 24px 20px; text-align: center;
+  font-size: 12px; letter-spacing: .06em; color: var(--dust);
+}
+.note:empty { display: none; }   /* 空の時に余白だけ残さない */
+
+/* 「もう一度」。罫の枠だけの釦 (.boundaryShelf と同じ顔) にして意匠を増やさない。
+   appearance と background を書かないと UA の明色の板が出る */
+.note-retry {
+  -webkit-appearance: none; appearance: none;
+  margin-left: 10px;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: transparent; color: var(--dust);
+  font: inherit; font-size: 12px; line-height: 1;
+  padding: 8px 16px;
+  transition: color var(--t-fast) var(--ease-soft),
+              border-color var(--t-fast) var(--ease-soft);
+}
+.note-retry:active { color: var(--paper); border-color: var(--paper); }
+.note-retry:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+
+/* 取りに行っている間の棚。**高さも並びも動かさず**、古い物だと分かるだけ薄くする
+   (捨ててから取りに行くと真っ白になる。それが一番嫌われる) */
+.grid.stale { opacity: .55; transition: opacity var(--t-fast) var(--ease-soft); }
+@media (prefers-reduced-motion: reduce) { .grid.stale { transition: none; } }
+
+.book {
+  --i: 0;
+  display: flex; flex-direction: column; gap: 8px; border: 0; background: none;
+  padding: 0; text-align: left; font: inherit; color: inherit;
+  opacity: 0; transform: translateY(9px);
+}
+/* 棚は一枚ずつ置かれていく。間隔は 26ms: これ以上空けると「待たされる」に変わる */
+.book.in {
+  opacity: 1; transform: none;
+  transition: opacity 420ms var(--ease-out) calc(var(--i) * 26ms),
+              transform 420ms var(--ease-out) calc(var(--i) * 26ms);
+}
+.book:focus-visible { outline: 2px solid var(--nail); outline-offset: 4px; border-radius: 4px; }
+/* 押した時は沈むのではなく縮む。指の下で紙が撓む感じに寄せる */
+.book:active .coverWrap { transform: scale(.972); }
+
+.coverWrap { position: relative; transition: transform 220ms var(--ease-out); }
+
+/* 机上版と同じ A 系の紙の比率。3/4 だと表紙の上下が削れる */
+.cover {
+  position: relative;
+  aspect-ratio: 105 / 148;
+  border-radius: 3px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #11161e, #1b2230);
+  box-shadow: 0 6px 18px rgba(0,0,0,.5), inset 0 0 0 1px rgba(239,232,216,.07);
+  display: block;
+  width: 100%;
+}
+.cover svg { display: block; width: 100%; height: 100%; }
+/* 実物の表紙。丈は比率が決めているので、余りは切って良い */
+.cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* ★ 目印: 折った角。24 時間以内に読んだ本にだけ付く。
+   真鍮の細い栞を載せる案は、真鍮に近い黄色い表紙で胴が地に溶けた
+   (所持庫の実物 90 冊で確認)。折り目なら地の色に関わらず「形」が出るし、
+   読みかけの本の角を折るという所作そのものなので、匣と紙の比喩にも乗る。
+   長さで進み具合を言うのはやめたので、寸法は一定 */
+.dogear {
+  position: absolute;
+  top: 0; right: 0;
+  width: 26px; height: 26px;
+  border-top-right-radius: 3px;
+  /* 折り返した紙の裏。角から斜めに切る */
+  background: linear-gradient(225deg, var(--nail) 0 50%, transparent 50%);
+  /* 折り目の線。ここが無いと、ただの三角の札に見える */
+  filter: drop-shadow(-1px 1px 1px rgba(6,9,13,.55));
+  transform-origin: top right;
+  transform: scale(0);
+}
+.dogear.done { background: linear-gradient(225deg, var(--jade) 0 50%, transparent 50%); }
+/* 棚が並び終えた少し後に、角が折られる。この一拍が目印を目印として立たせる */
+.book.in .dogear {
+  transform: scale(1);
+  transition: transform 420ms var(--ease-out) calc(var(--i) * 26ms + 150ms);
+}
+
+/* 棚に出すのは表紙と題だけ。作者も数字も、一冊を開いたときに読めばよい */
+.bookTitle { font-size: 12.5px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 出どころが外のときだけ、手元にあるかを表紙の隅で言う */
+.owned {
+  position: absolute; left: 6px; bottom: 6px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+  color: var(--jade); background: rgba(6,9,13,.82);
+  border: 1px solid rgba(47,191,160,.45); border-radius: 3px; padding: 2px 5px;
+}
+
+/* ── 下から出る紙 (共通) ──────────────────────────────
+
+   幕は body の直下に置くこと。棚の中に入れると、棚が縮むときに巻き添えになる */
+
+.scrim {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(6,9,13,.68);
+  opacity: 0;
+  transition: opacity var(--t-base) var(--ease-soft);
+  border: 0; padding: 0;
+  /* 指の受けは「見えている間」ではなく「hidden になるまで」。閉じ際に状態札が
+     先に外れると、薄暗い所への一突きが幕を素通りして下のカードを開いてしまう
+     (実機で発覚。2026-08-20 に pointer-events:none へ変えて再発させ、
+      swallowNextClick() だけでは防げないことを確認した。触るな)。
+     伏せるまでは幕が全部呑む */
+  pointer-events: auto;
+}
+.scrim[hidden] { display: none; }
+:is(body, .screen).sheeted .scrim,
+:is(body, .screen).drumOn .scrim,
+:is(body, .screen).filtersOn .scrim { opacity: 1; }
+
+.grabber { width: 38px; height: 4px; border-radius: 2px; background: var(--rule); margin: 0 auto 16px; flex: none; }
+
+/* ── 一冊の紙 ───────────────────────────────────────── */
+
+/* 骨組みの #sheet がそのまま紙。class を付け直しても効くように両方で受ける */
+#sheet, .sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  max-height: 76%;
+  background: var(--cabinet);
+  border-top: 1px solid var(--rule);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -20px 50px rgba(0,0,0,.6);
+  transform: translateY(100%);
+  transition: transform var(--t-sheet) var(--ease-out);
+  display: flex; flex-direction: column;
+  padding: 10px 20px calc(var(--safe-b) + 22px);
+  overflow-y: auto; overscroll-behavior: contain;
+}
+:is(body, .screen).sheeted :is(#sheet, .sheet) { transform: translateY(0); }
+
+.sheetTop { display: flex; gap: 16px; }
+.sheetCover { width: 104px; flex: none; }
+.sheetInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+.sheetTitle { font-size: 17px; line-height: 1.45; font-weight: 500; margin: 0; text-wrap: balance; }
+
+/* 評価は星そのもので言う。「評価」の語は要らない */
+.stars { display: flex; gap: 4px; color: var(--nail); }
+.stars svg { display: block; }
+.stars .off { color: var(--rule); }
+
+/* 素性は「印 + 中身」。欄の名は書かず、印がどの欄かを言う。
+   縦に一列で揃える必要はない: 作者とサークルは対なので同じ行に並べ、
+   長いことのある原作とキャラだけ行を分ける */
+.facts { display: flex; flex-direction: column; gap: 7px; }
+.factLine { display: flex; align-items: baseline; gap: 14px; min-width: 0; flex-wrap: wrap; }
+.fact { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.fact > svg { flex: none; color: var(--dust); transform: translateY(2px); }
+.fact > span {
+  font-size: 12px; line-height: 1.45; color: var(--paper); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* タグは素性の列に置いて畳んでおく。全部並べると紙の丈が倍になるが、
+   何枚あるかだけは畳んだまま見せて、開くかどうかを決められるようにする */
+.tagToggle {
+  display: flex; align-items: center; gap: 6px; align-self: flex-start;
+  /* 畳んだタグを開く唯一の口。10.5px の字のままでは指が外れるので、
+     .groupTitle と同じ手で丈を変えずに当たりだけ広げる */
+  border: 0; background: transparent; padding: 13px 10px; margin: -11px -10px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--dust);
+  transition: color var(--t-fast) var(--ease-soft);
+}
+.tagToggle:active { color: var(--paper); }
+.tagToggle:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+.tagToggle .chev { transition: transform var(--t-base) var(--ease-out); }
+.tagToggle[aria-expanded="true"] { color: var(--nail); }
+.tagToggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+.tagList {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  overflow: hidden; max-height: 0; opacity: 0;
+  transition: max-height var(--t-sheet) var(--ease-out), opacity var(--t-base) var(--ease-soft),
+              margin-top var(--t-sheet) var(--ease-out);
+}
+.tagList.open { max-height: 260px; opacity: 1; margin-top: 4px; }
+
+/* 机上版の詳細と同じ扱い: 枠線だけを持ち、地は透かす。
+   角だけ丸めて、札であることを言う */
+.tag {
+  border: 1px solid var(--rule); background: transparent; border-radius: 999px;
+  padding: 4px 10px; font: inherit; font-size: 11.5px; color: var(--paper);
+  transition: border-color var(--t-fast) var(--ease-soft), color var(--t-fast) var(--ease-soft);
+}
+/* 種別ごとの色も机上版のまま */
+.tag.series { color: #8fb8dd; border-color: rgba(143,184,221,.4); }
+.tag.character { color: #4cc9ad; border-color: rgba(76,201,173,.4); }
+.tag:active { border-color: var(--nail); color: var(--nail); }
+.tag:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+
+/* 日付は表紙の下に小さく。素性の列に混ぜるほどの重さは無い */
+.coverDate {
+  margin-top: 7px; text-align: center;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+  color: var(--dust); font-variant-numeric: tabular-nums;
+}
+
+/* 帯の埋まり具合がどこまで読んだか。総数は帯の端に小さく添えるだけで、
+   進み具合の数字 (何頁まで読んだ / 何%) は出さない */
+.pagesRail { height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; margin-top: 18px; flex: none; }
+.pagesFill { height: 100%; border-radius: 2px; background: var(--nail); }
+.pagesFill.done { background: var(--jade); }
+.pagesTotal {
+  margin-top: 6px; text-align: right;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+  color: var(--dust); font-variant-numeric: tabular-nums;
+}
+
+.sheetActs { display: flex; gap: 10px; margin-top: 16px; flex: none; }
+.sheetActs[hidden] { display: none; }
+/* 手元に無い本。落とす道はここに置かない (母艦の仕事) */
+.notHere {
+  margin: 22px 0 4px; text-align: center;
+  font-size: 12.5px; color: var(--dust);
+}
+
+.btn {
+  flex: 1; height: 50px; border-radius: 11px; border: 1px solid var(--rule);
+  background: var(--shelf); color: var(--paper); font: inherit; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: border-color var(--t-fast) var(--ease-soft), background-color var(--t-fast) var(--ease-soft),
+              color var(--t-fast) var(--ease-soft), transform 120ms var(--ease-out);
+}
+.btn:active { transform: scale(.985); }
+.btn:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+.btn.primary { background: rgba(201,162,39,.13); border-color: var(--nail); color: var(--nail); flex: 1.7; font-weight: 500; }
+.btn.ghost { flex: 1; color: var(--dust); }
+
+/* ── 絞り込み (胴) ──────────────────────────────────── */
+
+/* 押した一項目だけを開く。二つ順に選ばされるのは煩わしい。
+   骨組みの #drum がその紙。モックの .filters でも効くようにしておく */
+#drum, .filters {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+  background: var(--cabinet); border-top: 1px solid var(--rule); border-radius: 20px 20px 0 0;
+  box-shadow: 0 -20px 50px rgba(0,0,0,.6);
+  padding: 10px 0 calc(var(--safe-b) + 14px);
+  transform: translateY(100%); transition: transform var(--t-sheet) var(--ease-out);
+  display: flex; flex-direction: column; gap: 4px;
+}
+:is(body, .screen).drumOn :is(#drum, .filters),
+:is(body, .screen).filtersOn :is(#drum, .filters) { transform: translateY(0); }
+
+/* 回して止めた所がそのまま決まる。決めの釦は要らないので、
+   閉じるための小さな印だけを見出しの行に置く */
+.filterHead { display: flex; align-items: center; padding: 0 14px 0 20px; }
+.filterLabel {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  font-size: 12px; letter-spacing: .1em; color: var(--dust);
+}
+.filterLabel svg { display: block; }
+.iconBtn.sm { width: 34px; height: 34px; color: var(--nail); }
+
+/* iOS の日付選びと同じ胴。回した先で止まった一つが選ばれる。
+   真ん中に帯を置いて「ここが選ばれている場所」を言い、
+   離れるほど寝かせて薄くすることで、円筒に見せる (角度は JS が着ける) */
+.wheel { position: relative; height: 220px; perspective: 900px; }
+.wheelBand {
+  position: absolute; left: 20px; right: 20px; top: 50%; height: 44px;
+  transform: translateY(-50%); border-radius: 9px;
+  background: rgba(239,232,216,.05);
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  pointer-events: none;
+}
+.wheelTrack {
+  height: 100%; overflow-y: auto; scroll-snap-type: y mandatory;
+  /* 上下の余白は (胴の丈 - 段の丈) / 2。端の札も帯の中まで来られる */
+  padding: 88px 0; transform-style: preserve-3d;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+.wheelItem {
+  height: 44px; display: flex; align-items: center; justify-content: center;
+  scroll-snap-align: center; border: 0; background: transparent; width: 100%;
+  font: inherit; font-size: 17px; color: var(--paper);
+  will-change: transform, opacity;
+}
+.wheelItem.sel { color: var(--nail); }
+.wheelItem:focus-visible { outline: 2px solid var(--nail); outline-offset: -4px; }
+
+.filterFoot { padding: 4px 20px 0; display: flex; }
+
+/* ── 読む ───────────────────────────────────────────── */
+
+#reader {
+  /* 文書が伸び縮みしても画面に張り付く。文書スクロールは開く時に錠を掛ける (read.js) */
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  z-index: 40; background: #05070a;
+  /* 高さは書かない。iPhone の据え置きで下に帯が残る件は html.reading (上) で、
+     文書の側を高く保って直す。器を伸ばしても 812 で切られるだけだった */
+  /* 下に控えている紙 (読み方など) が、帯の伸び縮みの一瞬でも外に覗かないように */
+  overflow: hidden;
+  opacity: 0; transform: scale(.97); pointer-events: none;
+  transition: opacity var(--t-base) var(--ease-soft), transform var(--t-base) var(--ease-out);
+}
+:is(body, .screen).reading #reader { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+/* touch-action: none が肝。無いと実機の iOS はどちらの指か自分で判じようとして
+   pointercancel を出し、横払いの送りが握り潰される (マウス検証では出ない罠) */
+.pageStage { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
+
+/* 頁は三枚の紙を一本の帯 (.pageStrip) に並べ、帯ごと横に滑らせる (Kindle と同じ)。
+   前の頁・今の頁・次の頁が画面一枚ぶんずつ隣り合い、指に付いて 1:1 で動く。
+   紙の位置 (どちらが前でどちらが次か) は read.js の layout が読む向きで決めて
+   translateX(±100%) を直に張る。帯の x も read.js (Web Animations) が動かすので、
+   ここには遷移を書かない。
+   以前の「距離を px で頭打ちにした横滑り」は絵が揺れて見える (iPad 実機 2026-08-20)
+   として透かすだけにしていたが、幅いっぱい・前後が繋がった滑りに改めた (2026-09-11) */
+.pageStrip { position: absolute; inset: 0; will-change: transform; }
+.pageSheet {
+  position: absolute; inset: 0; padding: 0 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pageSheet svg, .pageSheet img {
+  display: block; max-width: 100%; max-height: 100%;
+  object-fit: contain; box-shadow: 0 0 40px rgba(0,0,0,.7);
+}
+
+/* 縦につづけて出す時。モックには無い形なので、最小限だけ置く。
+   丈は ratios から aspect-ratio で先に確保してから読ませる (場所が動かない) */
+.pageStage.scrollFlow { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.pageStage.scrollFlow img { display: block; width: 100%; height: auto; background: #05070a; }
+
+/* 送り帯: 見えないが、指の当たる場所を分ける。
+   端の光る演出は置かない。頁が動くこと自体が「効いた」の返事になっている */
+.zone { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 45; border: 0; background: transparent; padding: 0; touch-action: none; }
+.zone.l { left: 0; } .zone.r { right: 0; } .zone.c { left: 30%; width: 40%; }
+
+.chromeTop {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 60;
+  padding: calc(var(--safe-t) + 10px) 8px 14px 6px;
+  display: flex; align-items: center; gap: 4px;
+  background: linear-gradient(180deg, rgba(5,7,10,.94) 55%, transparent);
+  /* 画面外まで飛ばさない。10px と透過だけで足りるし、その方が静か */
+  transform: translateY(-10px); opacity: 0; pointer-events: none;
+  transition: transform var(--t-base) var(--ease-out), opacity var(--t-fast) var(--ease-soft);
+}
+.chromeBot {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 60;
+  padding: 14px 18px calc(var(--safe-b) + 10px);
+  background: linear-gradient(0deg, rgba(5,7,10,.95) 58%, transparent);
+  transform: translateY(10px); opacity: 0; pointer-events: none;
+  transition: transform var(--t-base) var(--ease-out), opacity var(--t-fast) var(--ease-soft);
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* つまみは一番下の段に置く (絵と被る、もう少し下へ、という実機指摘)。
+   道具の並びの上下だけを入れ替え、DOM は触らない */
+.chromeBot .scrub { order: 2; }
+.chromeBot .readActs { order: 1; }
+:is(body, .screen).chromeOn .chromeTop,
+:is(body, .screen).chromeOn .chromeBot { transform: none; opacity: 1; pointer-events: auto; }
+
+.iconBtn {
+  width: 44px; height: 44px; flex: none; border: 0; background: transparent; color: var(--paper);
+  display: inline-grid; place-items: center; border-radius: 10px;
+  transition: color var(--t-fast) var(--ease-soft), transform 120ms var(--ease-out);
+}
+.iconBtn:active { transform: scale(.9); color: var(--nail); }
+.iconBtn:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+.iconBtn svg { display: block; }
+
+.readTitle { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 送りの棒 = 細い線と丸 (Kindle の位置つまみと同じ顔。2026-09-11 に栞形から改めた)。
+   位置は read.js が --pct (0% = 1 頁目, 100% = 最後の頁) で渡す。
+   進む向きは読む向きに従う: .rtl が付いている間は右端が始まりで、左へ進む */
+.scrub { display: flex; align-items: center; }
+.scrubRail { position: relative; flex: 1; height: 28px; display: flex; align-items: center; touch-action: none; }
+/* 透かさない。線を半透明にすると下の帯が透けて、線が二重に見える。
+   読んだ分は真鍮を 0.62 で夜に重ねた値を不透明で持ち、掴んだときだけ素の真鍮まで濃くなる */
+.scrubRail::before { content: ""; position: absolute; left: 0; right: 0; height: 2px; border-radius: 1px; background: #262e3b; }
+.scrubDone {
+  position: absolute; left: 0; width: var(--pct, 0%); height: 2px; border-radius: 1px;
+  background: #7f671c;
+  transition: background-color var(--t-fast) var(--ease-soft);
+}
+.scrubRail.rtl .scrubDone { left: auto; right: 0; }
+.scrubRail.held .scrubDone { background: var(--nail); }
+/* 丸。読んでいる間は主役ではないので小さく鈍く、掴んだときだけ大きく明るくなる */
+.scrubKnob {
+  position: absolute; left: var(--pct, 0%); width: 12px; height: 12px; border-radius: 50%;
+  background: #9c7c1c;
+  transform: translateX(-50%);
+  transition: transform 180ms var(--ease-out), background-color var(--t-fast) var(--ease-soft);
+}
+.scrubRail.rtl .scrubKnob { left: auto; right: var(--pct, 0%); transform: translateX(50%); }
+.scrubRail.held .scrubKnob { transform: translateX(-50%) scale(1.35); background: var(--nail); }
+.scrubRail.rtl.held .scrubKnob { transform: translateX(50%) scale(1.35); }
+
+/* 頁数は読んでいる間ずっと出さない。掴んだ時だけ、丸の上に浮く */
+.scrubNum {
+  position: absolute; left: var(--pct, 0%); bottom: 27px;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--paper);
+  letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--cabinet); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 4px 9px; opacity: 0; pointer-events: none;
+  transform: translateX(-50%) translateY(5px);
+  transition: opacity var(--t-fast) var(--ease-soft), transform var(--t-fast) var(--ease-out);
+}
+.scrubRail.rtl .scrubNum { left: auto; right: var(--pct, 0%); transform: translateX(50%) translateY(5px); }
+.scrubNum span { color: var(--dust); font-weight: 400; }
+.scrubRail.held .scrubNum { opacity: 1; transform: translateX(-50%) translateY(0); }
+.scrubRail.rtl.held .scrubNum { transform: translateX(50%) translateY(0); }
+
+.readActs { display: flex; align-items: center; gap: 2px; }
+.readActs .spacer { flex: 1; }
+
+/* ── 読み方 ─────────────────────────────────────────── */
+
+.prefs {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 70;
+  background: var(--cabinet); border-top: 1px solid var(--rule); border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(var(--safe-b) + 24px);
+  transform: translateY(100%); transition: transform var(--t-sheet) var(--ease-out);
+  display: flex; flex-direction: column; gap: 20px;
+}
+:is(body, .screen).prefsOn .prefs { transform: translateY(0); }
+/* 読み方が上がっている間、下の操作板は引っ込む (二枚重なると触る所が分からない) */
+:is(body, .screen).prefsOn .chromeBot { transform: translateY(10px); opacity: 0; pointer-events: none; }
+
+.prefRow { display: flex; flex-direction: column; gap: 9px; }
+.prefLabel { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: var(--dust); }
+
+/* 二択は両方見せる。押すたびに文字が入れ替わる釦は、今どちらなのか読めない */
+.segmented { display: flex; background: var(--night); border: 1px solid var(--rule); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg {
+  flex: 1; height: 44px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--dust); font: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color var(--t-fast) var(--ease-soft), color var(--t-fast) var(--ease-soft);
+}
+.seg[aria-pressed="true"] { background: rgba(201,162,39,.14); color: var(--nail); }
+.seg:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+.seg svg { display: block; }
+
+/* ── 道シルベ (右上の丸印から呼ぶ) ──────────────────── */
+
+/* 区切りは送り帯 (30/40/30) と同じ割り。どこを押すと何が起きるかを、
+   その場所の上に重ねて言う */
+#coach, .coach {
+  position: fixed; inset: 0; z-index: 75; display: grid; grid-template-columns: 30% 40% 30%;
+  background: rgba(6,9,13,.82); backdrop-filter: blur(2px);
+  opacity: 0; pointer-events: none; transition: opacity var(--t-base) var(--ease-soft);
+}
+:is(body, .screen).coachOn :is(#coach, .coach) { opacity: 1; pointer-events: auto; }
+.coachCell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 0 8px; text-align: center; border-right: 1px dashed rgba(201,162,39,.3);
+}
+.coachCell:last-child { border-right: 0; }
+.coachCell svg { color: var(--nail); }
+.coachCell b { font-size: 13px; font-weight: 500; }
+.coachFoot {
+  position: absolute; left: 0; right: 0; bottom: calc(var(--safe-b) + 28px);
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.coachFoot p { margin: 0; font-size: 12.5px; color: var(--dust); }
+.coachFoot .btn { width: 160px; flex: none; }
+
+/* ── 動きを減らす設定 ───────────────────────────────── */
+
+/* 入れている端末では、すべて即時に切り替わる。0 にせず極小にするのは、
+   transitionend を待って組み替えている所を止めないため */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    /* 遷移は「短くする」のではなく「無くす」(2026-08-20)。
+
+       .001ms でも遷移そのものは作られる。display:none から出したばかりの要素だと、
+       始点で登録されたまま一度も進まないことがある — iPad 第8世代の実測で、紙が
+       translateY(100%) = 328px のまま 900ms 動かず、幕だけ暗くなる状態が 9 回中 7 回。
+       本流は 60fps で回っていて暇なので、詰まっているのは遷移の側。
+       transition-property を none にすれば遷移が作られず、新しい値が即座に当たる。
+       transitionend / animationend を待っている箇所は無いので待ちぼうけは起きない */
+    transition: none !important;
+    animation-duration: .001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 棚の追補 (reader.css へ合流させる断片)
+
+   足したのは二つだけ:
+     1. 帯 (.resumeCard) の一突きが再開になったので、長押しを紙に譲った
+     2. 一冊の紙の素性とタグが押せるようになった (押した語で棚を絞る)
+
+   色も動きの語彙も reader.css の変数のまま。新しい色は持ち込まない。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 帯: 一突きで再開、長押しで紙 ─────────────────────
+
+   長押しに「紙を開く」を割り当てた以上、iOS の既定の長押し
+   (画像を保存するメニュー / 題の文字選択) が先に出ては困る。
+   格子の札には掛けない: あちらは従来どおり一突きで紙が開く       */
+
+.resumeCard {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 表紙を掴んで引きずれると、長押しが「掴んだ」に化ける */
+.resumeCard img { -webkit-user-drag: none; }
+
+/* ── 一冊の紙: 素性の値は押せる ───────────────────────
+
+   下線も釦枠も付けない。素性の列に釦が四つも並ぶと、読む前に
+   意匠が騒がしくなる。押せることは触った時の色でだけ言う。
+
+   display:inline にしてあるので、値は文字と同じ振舞いをする:
+   親 (.fact > span = .factVals) の ellipsis がそのまま効き、
+   値の間の「、」も従来の位置に出る。
+   縦の padding は行の高さを変えずに指の当たりだけ広げる            */
+
+.factVal {
+  display: inline;
+  margin: 0; padding: 5px 0;
+  border: 0; background: transparent;
+  font: inherit; color: inherit; text-align: inherit;
+  -webkit-appearance: none; appearance: none;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+  transition: color var(--t-fast) var(--ease-soft);
+}
+/* 触っている間だけ藍に寄る。押した先 (棚が絞られる) の色ではなく、
+   「今ここに指がある」の返事なので、真鍮は使わない */
+.factVal:active { color: var(--ink); }
+.factVal:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; border-radius: 3px; }
+
+/* ── 一冊の紙: タグのピルも押せる ─────────────────────
+
+   ピルはもとから釦の形をしているので、意匠は足さない。
+   span から button に変わったぶんの均しだけ置く
+   (:active で真鍮に寄る反応は reader.css の .tag:active が既に持っている) */
+
+.tag {
+  -webkit-appearance: none; appearance: none;
+  text-align: inherit;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 読む画面に足した二枚 (reader.css へ合流させる断片)
+
+   置き場は reader.css の「── 読む ──」の節の末尾、
+   .readActs の後・「── 読み方 ──」の前が収まりが良い。
+   色・曲線・時間は本体の :root の変数をそのまま使う (新しい語彙は足さない)。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 戻り札 ─────────────────────────────────────────────
+
+   つまみで大きく跳んだ後にだけ出る帰り道。右下の隅に小さな ↩ の丸 —
+   「戻れる機能が一応ある」と伝われば足りるので、目立たせない。
+   頁数も文言も書かない (数字を出してよいのはつまみを掴んでいる間だけ)。
+   地は棚色・枠は罫・印は埃で、触った時だけ真鍮が言葉になる       */
+
+.backPill {
+  position: absolute; right: 14px; z-index: 62;
+  bottom: calc(var(--safe-b) + 18px);
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--rule);
+  background: var(--shelf); color: var(--dust);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+  /* 出るのは 160ms で 6px 下から。引っ込む間は触れないようにする
+     (消えかけの札を突けてしまわないよう) */
+  opacity: 0; pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity var(--t-fast) var(--ease-soft),
+              transform var(--t-fast) var(--ease-out),
+              bottom var(--t-base) var(--ease-out),
+              color var(--t-fast) var(--ease-soft),
+              border-color var(--t-fast) var(--ease-soft);
+}
+/* 下帯が出ている間はその上へ避ける (右下は読み方の釦の席)。bottom の
+   transition があるので、帯の出入りに合わせて滑って移る */
+:is(body, .screen).chromeOn .backPill { bottom: calc(var(--safe-b) + 126px); }
+.backPill.on { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.backPill:active { color: var(--nail); border-color: var(--nail); }
+.backPill:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+
+/* ── 作品の継ぎ目 ───────────────────────────────────────
+
+   端から更に送ろうとした時にだけ出る、机上版 reader-boundary と同じ札。
+   舞台の黒を敷いて隣の本の顔を浮かべる。もう一度同じ向きに送るか、
+   顔を突いたら開く。下に小さな「棚へ戻る」だけを添える                  */
+
+.readBoundary[hidden] { display: none; }
+.readBoundary {
+  position: absolute; inset: 0; z-index: 44;   /* 頁の上・上下の帯 (60) の下 */
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 30px;
+  padding: 24px;
+  background: #07090d;
+  touch-action: none;   /* 継ぎ目の上でもう一度払う「開く」を、iOS に横取りさせない */
+}
+
+.reader-next {
+  display: flex; align-items: center; gap: 18px;
+  max-width: 86%;
+  /* 札も頁と同じ間合いで浮かす。畳むのは hidden の仕事なので出るときだけ */
+  animation: reader-fade 60ms linear;
+}
+@keyframes reader-fade { from { opacity: 0; } }
+
+.reader-next-cover {
+  flex: 0 0 auto;
+  height: 170px; width: auto;
+  border: 1px solid var(--rule);
+  object-fit: contain;
+}
+.reader-next-text { min-width: 0; }
+.reader-next-text p { margin: 0; overflow: hidden; text-overflow: ellipsis; }
+.reader-next-text p + p { margin-top: 7px; }
+.reader-next-kicker {
+  color: var(--dust);
+  font-family: var(--mono); font-size: 12px; letter-spacing: .12em;
+}
+/* 棚の端 (隣が無い)。読了の翠を一滴だけ */
+.reader-next-kicker.eol { color: var(--jade); }
+.reader-next-title {
+  color: var(--paper); font-size: 15px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.reader-next-creator { color: var(--dust); font-size: 12.5px; }
+.reader-next-star { color: var(--nail); font-family: var(--mono); font-size: 13px; }
+
+.boundaryShelf {
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: transparent; color: var(--dust);
+  font: inherit; font-size: 12px; line-height: 1;
+  padding: 9px 18px;
+  transition: color var(--t-fast) var(--ease-soft),
+              border-color var(--t-fast) var(--ease-soft);
+}
+.boundaryShelf:active { color: var(--paper); border-color: var(--nail); }
+.boundaryShelf:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+
+/* ═══ 第三陣: 読む画面のピンチ一覧・下引き閉じ (ux3-read) ═══ */
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 読む画面に足した指の二つ (reader.css へ合流させる断片)
+
+   置き場は reader.css の末尾でよい (前回合流した .backPill / .readBoundary の
+   後ろ)。強いて言えば .readBoundary の節の直後が、同じ「読む画面に重なる物」
+   として並びが揃う。
+   色・曲線・時間は本体の :root の変数をそのまま使う (新しい語彙は足さない)。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 頁の一覧 (モザイク) ─────────────────────────────────
+
+   二本指でつまむと、読んでいる頁から一歩引いて全頁の格子になる
+   (写真アプリと同じ文法)。器そのものを格子にしてあるので、
+   中身は .mosaicTile が直に並ぶだけ。
+
+   重なりは 65: 送り帯 (45) と継ぎ目 (44) の上、道シルベ (75) の下。
+   上下の帯 (60) と戻り札 (62) より上に置くのは、一覧を開く時に
+   操作板を引かせるから — 引く途中の帯が格子の上をよぎらない       */
+
+.pageMosaic[hidden] { display: none; }
+.pageMosaic {
+  position: absolute; inset: 0; z-index: 65;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  /* 段の丈は固定。タイルの比や aspect-ratio の解釈に任せると、実機で
+     札が潰れて重なって見えた。固定の段なら何があっても整列する */
+  grid-auto-rows: 168px;
+  gap: 10px;
+  align-content: start;
+  padding: calc(var(--safe-t) + 14px) 12px calc(var(--safe-b) + 20px);
+  overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* 舞台と同じ黒。一覧は別の画面ではなく、同じ匣の中で引いた眺めなので */
+  background: #05070a;
+  /* 一本指は縦に繰るためのもの。横と拡大は端末に渡さない
+     (二本指のつまみは read.js が preventDefault で受ける) */
+  touch-action: pan-y;
+  /* つまんだ手つきの続きとして開く。ほんの少し大きい所から縮んで収まると、
+     「頁から引いた」に見える。距離ではなく倍率なので 1.04 = 数 px 相当 */
+  opacity: 0; transform: scale(1.04);
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-soft),
+              transform var(--t-base) var(--ease-out);
+}
+:is(body, .screen).mosaicOn .pageMosaic {
+  opacity: 1; transform: none; pointer-events: auto;
+}
+
+
+/* タイルは読む画面と同じ焼き上がりを縮めて出す。丈は aspect-ratio が
+   先に取ってある (read.js が ratios から張る) ので、絵が届いても格子は動かない。
+   角は 2px — 表紙 (3px) より浅くして、これは表紙ではなく中の紙だと言う */
+.mosaicTile {
+  display: block; width: 100%; padding: 0;
+  /* 丈は段 (grid-auto-rows) が決める。縦長の箱に絵を contain で収める */
+  height: 100%;
+  border: 1px solid var(--rule); border-radius: 2px;
+  background: #0a0a0a; color: inherit; font: inherit;
+  overflow: hidden;
+  transition: border-color var(--t-fast) var(--ease-soft),
+              box-shadow var(--t-fast) var(--ease-soft),
+              transform 120ms var(--ease-out);
+}
+.mosaicTile img {
+  display: block; width: 100%; height: 100%;
+  object-fit: contain; background: #0a0a0a;
+}
+/* 棚の札と同じ手ごたえ。沈むのではなく縮む */
+.mosaicTile:active { transform: scale(.96); }
+/* 今の頁だけ真鍮。枠を太らせると絵が動くので、影で一枚ぶん足して濃くする */
+.mosaicTile.now {
+  border-color: var(--nail);
+  box-shadow: 0 0 0 1px var(--nail);
+}
+.mosaicTile:focus-visible { outline: 2px solid var(--nail); outline-offset: 2px; }
+
+/* ── 下へ引いて本を閉じる ───────────────────────────────
+
+   引いている間の追随は read.js が transform を直に書く (指の位置そのものなので
+   遷移を挟まない)。様式が持つのは「離した後の跳ね戻り」だけ。
+   届かなかった時も、閉じる時も同じ道を通る                            */
+
+.pageStage.pullBack, .pageFlow.pullBack {
+  transition: transform var(--t-base) var(--ease-out);
+}
+
+/* ═══ 第三陣: 棚の引き直し・払い閉じ (ux3-shelf) ═══ */
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 棚に足した指の二つ (reader.css へ合流させる断片)
+
+   足したのは:
+     5. 棚を上端から下に引くと引き直す (棚の頭に真鍮の糸が伸びる)
+     6. 一冊の紙と胴を下に払うと閉じる (動きは JS が直に持つ)
+
+   置き場は reader.css の「── 棚 ──」の節、.bookTitle / .owned の後・
+   「── 下から出る紙 (共通) ──」の前が収まりが良い (糸は棚の持ち物)。
+   末尾の払いの分だけは .grabber / .filterHead の隣でもよい。
+   色も動きの語彙も本体の :root のまま。新しい色は持ち込まない。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 引き直しの糸 ───────────────────────────────────────
+
+   輪も、数字も、「離すと更新」の文字も置かない。棚の頭に真鍮の糸が
+   左右から伸びてくるだけにする。伸び切って中で出会った所が発動の境で、
+   長さそのものが「あとどれだけ引けばよいか」を言っている。
+
+   丈を持たない (height: 0) ので、糸が居ても棚の並びは一切ずれない。
+   居場所は .groupLabel の上の余白 (padding-top: 20px) の中。
+   左右の 20px は棚の余白 (.grid / .groupLabel) と同じ位置に合わせてある  */
+
+.pullLine {
+  --pull: 0;             /* 0 → 1。引いた量を JS が入れる */
+  position: relative; height: 0;
+  pointer-events: none;  /* 糸は見るだけの物。指は棚に通す */
+}
+.pullLine i {
+  position: absolute; top: 11px;
+  height: 1px; width: calc(50% - 22px);
+  background: var(--nail);
+  opacity: var(--pull);
+  /* 幅ではなく scaleX で伸ばす。毎指ごとに組み直しを起こさない */
+  transform: scaleX(var(--pull));
+}
+.pullLine i:first-child { left: 20px; transform-origin: left center; }
+.pullLine i:last-child { right: 20px; transform-origin: right center; }
+
+/* 引いている最中は指に直結 (間合い無し)。離した時だけ滑って戻る/伸び切る */
+.pullLine.ease i {
+  transition: transform var(--t-base) var(--ease-out),
+              opacity var(--t-base) var(--ease-out);
+}
+
+/* 引き直している間。伸び切ったまま灯し、ごく浅く息をさせる。
+   点滅ではなく呼吸にするのは、待たせていることだけを言えば足りるため。
+   動きを減らす設定では 100% (灯ったまま) で止まる                */
+.pullLine.lit i { opacity: 1; animation: pullBreath 1.6s var(--ease-soft) infinite; }
+@keyframes pullBreath {
+  0% { opacity: 1; }
+  50% { opacity: .45; }
+  100% { opacity: 1; }
+}
+
+/* ── 下に払って閉じる ───────────────────────────────────
+
+   沈む動きは JS が transform を直に書くので、様式に足すことは無い。
+   置くのは掴む所の地固めだけ: 払っている間に題や札の文字が選択されると、
+   指を離した後に選択の吹き出しが残る                              */
+
+:is(#sheet, .sheet) .grabber,
+:is(#drum, .filters) .grabber,
+.filterHead {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 紙は全面から掴める。題と素性の行は読む物であって、掴んだ時に
+   選択が始まってよい場所ではない (値そのものは .factVal が押せる) */
+.sheetTitle, .facts, .coverDate, .pagesTotal {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 表紙を掴んで引きずれると、払いが「画像を掴んだ」に化ける */
+.sheetCover img { -webkit-user-drag: none; }
+
+/* ═══ 第四陣: 検索の候補 (ux4-shelf) ═══ */
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 検索欄の作者候補 (reader.css へ合流させる断片)
+
+   置き場は reader.css の「── 棚 ──」の節、.search / .fieldBtn の直後・
+   .shelfBody の前。候補は検索枠の持ち物なので、枠の様式の隣に居るのが読みやすい。
+
+   色も動きの語彙も本体の :root のまま。新しい色は持ち込まない。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 棚の頭を一段上げる ─────────────────────────────────
+
+   .shelfHead は backdrop-filter を持っているので、位置を持たなくても
+   それ自体が重なりの箱になる。中に z-index をいくら積んでも、箱ごと
+   .shelfBody (position: relative) の下に敷かれるため、候補の紙が棚の札に
+   隠れてしまう。頭に位置と 15 を持たせて、箱ごと棚の上に出す。
+   15 は「紙 (30) と幕 (20) より下、棚の中では一番上」の席     */
+
+.shelfHead { position: relative; z-index: 15; }
+
+/* 候補は検索枠にぶら下がる。枠を座標の親にする (見た目は変わらない) */
+.search { position: relative; }
+
+/* ── 候補の紙 ───────────────────────────────────────────
+
+   匣の紙 (--cabinet) に罫の枠。棚に被せる物なので影で一枚ぶん浮かせる。
+   出入りは 4px 下から浮くだけ: 検索枠から生えてきたように見えれば足りる。
+
+   畳んでいる間も DOM には居る ([hidden] は reader.css が display:none で
+   打ち消しているので、去り際が見えなくなる)。触れないよう pointer-events で
+   縁を切り、行の中身は次に出すときまで残す                        */
+
+.suggest {
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 6px);
+  z-index: 15;
+  background: var(--cabinet);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.5);
+  /* 候補は最大 8 行。画面の半分を越えたら中で送らせる (棚が全く見えなくなる方が困る) */
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease-soft),
+              transform var(--t-fast) var(--ease-out);
+  /* 候補を突く指が、長押しで文字選択や吹き出しに化けないように */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.suggest.on { opacity: 1; transform: none; pointer-events: auto; }
+
+/* ── 一行 ───────────────────────────────────────────────
+
+   日本語の札を上に大きく、ローマ字を下に小さく等幅で。件数は出さない。
+   行の間は罫だけ (帯や地の色で区切ると、紙の中に段が並んで見える)。
+   縦 9px + 二段で当たりは 46px 前後 — 親指で外さない丈になる       */
+
+.suggestRow {
+  display: flex; align-items: stretch; gap: 0;
+  width: 100%; padding: 9px 14px;
+  border: 0; border-top: 1px solid var(--rule);
+  background: transparent; color: inherit; font: inherit; text-align: left;
+  -webkit-appearance: none; appearance: none;
+  transition: background-color var(--t-fast) var(--ease-soft);
+}
+/* 種類は左端の線の色で言う。色は机上版の詳細画面のタグと同じ物 */
+.suggestBar {
+  flex: none; width: 2px; border-radius: 2px; margin-right: 10px;
+  background: var(--suggest-kind, #6d7887); opacity: .75;
+}
+.suggestRow[data-kind="artist"] { --suggest-kind: #e3b34c; }
+.suggestRow[data-kind="group"] { --suggest-kind: #d9c27e; }
+.suggestRow[data-kind="series"] { --suggest-kind: #8fb8dd; }
+.suggestRow[data-kind="character"] { --suggest-kind: #4cc9ad; }
+.suggestRow[data-kind="male"] { --suggest-kind: #7fb0e0; }
+.suggestRow[data-kind="female"] { --suggest-kind: #e08aa8; }
+.suggestRow[data-kind="either"] .suggestBar {
+  background: linear-gradient(#7fb0e0 0 50%, #e08aa8 50% 100%);
+}
+.suggestBody {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  min-width: 0; flex: 1;
+}
+/* 名前と所属作品は同じ行。狭い時は所属の側から詰める */
+.suggestHead { display: flex; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; }
+.suggestSeries {
+  min-width: 0;
+  font-size: 12px; line-height: 1.3; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.suggestRow:first-child { border-top: 0; }
+/* 押している行だけ薄い真鍮。選んだ先 (棚が絞られる) の色を、指の下で先に見せる */
+.suggestRow:active { background: rgba(201,162,39,.12); }
+.suggestRow:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+
+.suggestLabel {
+  flex: none; max-width: 100%;
+  font-size: 14px; line-height: 1.4; color: var(--paper);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.suggestName {
+  max-width: 100%;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  line-height: 1.3; color: var(--dust);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 日本語の札を持たない作家。ローマ字がその行の主役になるので、
+   添え物の埃色ではなく紙の色で、一回り大きく置く */
+.suggestLabel.solo { font-family: var(--mono); font-size: 13px; letter-spacing: .02em; }
+
+/* ═══ 第五陣: 台帳の切り替え (ux5-shelf) ═══ */
+/* ═══ 第五陣: 棚の台帳切り替え (ux5-shelf) ═══ */
+/* ───────────────────────────────────────────────────────────
+   文匣 手のひら版 — 紋章を突いて台帳を替える (reader.css へ合流させる断片)
+
+   置き場は reader.css の「── 棚 ──」の節、.brand / .brandMark / .brandText の
+   直後・.shelfRight の前。紋章の様式に釦としての顔を足すものなので、
+   元の三行の隣に居るのが読みやすい。
+
+   色も動きの語彙も本体の :root のまま。新しい色は持ち込まない。
+   ─────────────────────────────────────────────────────────── */
+
+/* ── 紋章を釦にする ─────────────────────────────────────
+
+   .brand は div から button になった。display:flex / align-items / gap は
+   元の .brand の指定がそのまま効くので、ここで足すのは「釦の顔を消す」分だけ。
+   何もしないと ぶよぶよした灰色の枠が題字ごと囲んでしまう          */
+
+.brand {
+  border: 0; background: transparent; padding: 0; margin: 0;
+  color: inherit; font: inherit; text-align: left;
+  -webkit-appearance: none; appearance: none;
+  /* 押せることは縮みで言う。原点を左肩に置かないと、突くたびに題字が右へ寄る */
+  transform-origin: left center;
+  transition: transform var(--t-fast) var(--ease-soft);
+  /* 突いた指が長押しで文字選択や吹き出しに化けないように (候補の行と同じ手当) */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 派手にはしない。0.94 は「押した」と分かる最小の縮み */
+.brand:active { transform: scale(.94); }
+.brand:focus-visible { outline: 2px solid var(--nail); outline-offset: 3px; border-radius: 8px; }
+
+/* ── 台帳の名 ───────────────────────────────────────────
+
+   小文字の席 (BUNKŌ) を台帳の名に譲った。今どちらを見ているかを言うのは
+   この一行だけなので、入れ替わりが目に留まる程度の間を置く。
+   色は埃のまま — 真鍮は「既定から動かしている」印に取ってあり、
+   台帳はどちらも既定ではないので、状態の色では言わない。
+
+   出入りは 6px。今の名が上へ退き (.out)、入れ替わった名が下から起きる。
+   .under は「間合いを持たない下の位置」で、JS が一枚だけ挟んで放す:
+   これを挟まないと、退いた上の位置から降りてきて「戻った」ように見える  */
+
+.brandSrc {
+  transition: opacity var(--t-fast) var(--ease-soft),
+              transform var(--t-fast) var(--ease-out);
+}
+.brandSrc.out { opacity: 0; transform: translateY(-6px); }
+.brandSrc.under { opacity: 0; transform: translateY(6px); transition: none; }
+
+/* ═══ 第六陣: 据え置きの戻る/進む (ux6-shelf) ═══ */
+/* ── 浮きの戻る/進む (ホーム画面に据えた時だけ) ──────────
+
+   据えると全画面になり、Safari の戻る/進むごと消える。その代わりを左下に。
+   DOM は standalone の時しか作らないので、Safari で開いている間はここは眠る。
+
+   顔は戻り札 (.backPill) と同じ規格 — 40px の丸、地は棚色・枠は罫・印は埃、
+   触った時だけ真鍮が言葉になる。増やすのは席だけで、語彙は増やさない。
+   z-index 18 は 幕 (20)・紙 (30)・胴 (35)・読む画面 (40) の下: 一冊を開いても
+   本を読んでも、この釦は何もしないまま隠れる                            */
+
+/* Safari の帯の錠剤と同じ顔 (利用者指定): ‹ › は一つのカプセルに同居し、
+   磨りガラスで裏がうっすら透ける。丸二つの案は「離れていて押しにくい」で撤回。
+   ※「半透明は使わない」の掟はつまみの線の二重見えの話 — ここは面なので裏が
+   透けても線は濁らず、指定どおりガラスにしている */
+.navPair {
+  position: fixed; z-index: 18;
+  /* 左端 64px (16→32→64 と実機で二度広げた)。隅すぎると親指が届かない */
+  left: 64px; bottom: calc(var(--safe-b) + 16px);
+  display: flex; gap: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  /* もっと透けさせる (実機指摘)。薄めたぶん暈しを深くして読みは保つ */
+  background: rgba(20, 26, 34, .34);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, .07);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+  /* 出入りは Safari と同じ手ざわり: 滑り落ちるのではなく、
+     その場で少し縮みながら すっと透ける */
+  transition: transform var(--t-base) var(--ease-out),
+              opacity var(--t-fast) var(--ease-soft);
+  transform-origin: center bottom;
+}
+.navPair.away {
+  transform: translateY(10px) scale(.92);
+  opacity: 0; pointer-events: none;
+}
+
+/* 一枚のカプセルの中の左右。全長は二席で 84px (70 の 1.2 倍・実機で再調整)。
+   丈も 42px に合わせてあるのは、進めない時に ‹ 一つだけが残った姿を
+   ちゃんと真円にするため (席が正方形なら 999px 角丸が円になる) */
+.navBtn {
+  width: 42px; height: 42px; border-radius: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent; color: var(--paper);
+  transition: width var(--t-base) var(--ease-out),
+              opacity var(--t-fast) var(--ease-soft),
+              background-color var(--t-fast) var(--ease-soft),
+              color var(--t-fast) var(--ease-soft);
+}
+/* これ以上進めない時、› は席ごと畳まれる。戻って進めるようになると横に広がって現れる */
+.navPair.noFwd .navBtn[data-nav="fwd"] {
+  width: 0; opacity: 0; pointer-events: none;
+}
+.navBtn:active { background: rgba(255, 255, 255, .08); color: var(--nail); }
+.navBtn:focus-visible { outline: 2px solid var(--nail); outline-offset: -2px; }
+.navBtn svg { width: 18px; height: 18px; flex: none; }
+
+/* Pixiv-style page count: shared by cards, details and related works. */
+.page-count-badge{position:absolute;top:4px;right:4px;z-index:3;display:inline-flex;align-items:center;gap:2px;padding:2px 5px;border-radius:999px;background:rgba(0,0,0,.36);color:#fff;font:600 11px/1.15 var(--font,sans-serif);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none;letter-spacing:0}
+.page-count-badge svg{display:block;width:12px;height:12px;flex:none}
+.page-count-badge>span{font:inherit;color:inherit;opacity:1}
+
+.cover>.page-count-badge svg{width:12px;height:12px}
+.cover>.dogear{right:auto;left:0;transform:scaleX(-1)}
+
+.pixiv-related-cover{position:relative;width:100%;overflow:hidden;border-radius:8px}
+.pixiv-related-cover>img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain}
+.pixiv-related-item .page-count-badge,.pixiv-related-item .page-count-badge>span{font-size:11px;opacity:1}
+.book.in .cover>.dogear{transform:scaleX(-1)}

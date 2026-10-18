@@ -1,0 +1,493 @@
+/* Home (源泉横断の作者の一覧と作者頁)。本体の変数と部品 (.card / .grid / .pixiv-related-item / .ui-segments) に
+   乗せる足し分だけを置く。docs/home-tab-spec-2026-09-23.md と、2026-09-27 の作り直し docs/ui-home-author-2026-09-27.md
+   (見出しは表紙三枚の扇・一覧の上に最近の動きの帯・道具の行に顔の札・作者頁は 頭 → ★の高い本 → 年ごと)。
+   色は bunko-ui.css の body の語 (--home-accent / --home-frame / --home-fan-shadow / --stamp / --mark / --select) だけ。
+   動きは ばね 480ms と 押し 220ms、transform と不透明度だけ (見出しと帯の高さは変わらない) */
+
+/* Home では使わない道具は引っ込める。消すと上部と道具の行の幅が動くので、見えなくするだけ。
+   右上の「所持作品」釦は Home では作者頁を所持の本だけにする旗 (home.js)。
+   表示の切り替え (#hide-owned) は作者頁でだけ効くので、一覧の間は伏せる */
+body[data-home] #language,
+body[data-home]:not([data-home-author]) .tail-tools,
+body[data-home] #recents { visibility: hidden; }
+/* 作者頁の間は一覧の器を畳み、件数も伏せる (作者頁の頭が冊数を言う)。種別の札は残し (押すと一覧へ戻る)、
+   どれも押されていない形にする (押されているのは顔の札のその人) */
+body[data-home-author] #grid,
+body[data-home-author] #empty,
+body[data-home-author] #status { display: none !important; }
+body[data-home-author] #result-info { visibility: hidden; }
+body[data-home-author] #types .chip.active { background: none; font-weight: 400; }
+body[data-home] .chip-discover { display: none; }
+
+/* ---- 一覧の作者の見出し = 扇 ----
+   一覧は揃え (bunko-ui.js の流しの判定が BunkoHome.uniformList を訊く)。扇は表紙より横に広いので段の幅は表紙の大きさの 1.2 倍
+   (表紙の大きさの設定がそのまま効く。三回目の直しで 1.35 → 1.2、横の余白を削った)。
+   上下の空きは詰める (2026-09-27 の二回目の直し: 扇の上の空き・字の器・段の間)。
+   Pawchive の作者の一覧 (#grid.paw-fan-list、app.js の pawFanList) も同じ扇の見出しで同じ段 */
+body[data-home]:not([data-home-author]) #grid:not(.is-list),
+#grid.paw-fan-list:not(.is-list) {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-min, 152px) * 1.2), 1fr));
+  gap: 8px 12px;
+}
+.grid:not(.is-list) .card.home-fan { gap: 4px; }
+.grid:not(.is-list) .home-fan .cover {
+  position: relative; aspect-ratio: 1.22; overflow: visible; background: none; border-radius: 0; box-shadow: none;
+}
+.home-fan .cover::after { display: none; }
+/* 台の影 (扇の足元に薄く) */
+.home-fan .cover::before, .home-av-fan::before {
+  content: ''; position: absolute; left: 22%; right: 22%; bottom: 0; height: 8%; z-index: 0; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .34), transparent);
+}
+body[data-ui-theme=light] .home-fan .cover::before, body[data-ui-theme=light] .home-av-fan::before {
+  background: radial-gradient(closest-side, rgba(0, 48, 73, .18), transparent);
+}
+/* 扇の札: 正面の一枚と、傾けた後ろの二枚 (後ろは正面にだいぶ隠す)。白い縁 (主題の紙の色) と影。
+   動きは ばね 480ms の transform だけ。触れると後ろが少し開き、正面が少し浮く */
+.home-fan-card {
+  position: absolute; left: 50%; bottom: 3%; height: 90%; width: auto; max-width: none; aspect-ratio: .72;
+  object-fit: cover; object-position: 50% 20%; border-radius: 9px;
+  border: 3px solid var(--home-frame); background: var(--shelf); box-shadow: var(--home-fan-shadow);
+  transform-origin: 50% 92%; transition: transform 480ms cubic-bezier(.16, 1, .3, 1), filter 220ms cubic-bezier(.2, .8, .2, 1);
+}
+/* 触れると開くのに加えて、hitomi の見出しと同じだけ少し光る (bunko-ui.css の brightness(1.06)) */
+.home-fan:hover .home-fan-card, .home-fan:focus-visible .home-fan-card { filter: brightness(1.06); }
+.home-fan-card.is-front { z-index: 3; transform: translateX(-50%); }
+.home-fan-card.is-back-1 { z-index: 1; transform: translateX(-50%) translateX(-24%) rotate(-5deg) scale(.92); }
+.home-fan-card.is-back-2 { z-index: 2; transform: translateX(-50%) translateX(24%) rotate(5deg) scale(.92); }
+.home-fan-card.is-blank { display: grid; place-items: center; color: var(--dust); }
+.home-fan:hover .home-fan-card.is-front, .home-fan:focus-visible .home-fan-card.is-front { transform: translateX(-50%) translateY(-3%); }
+.home-fan:hover .home-fan-card.is-back-1, .home-fan:focus-visible .home-fan-card.is-back-1 { transform: translateX(-50%) translateX(-34%) rotate(-8deg) scale(.92); }
+.home-fan:hover .home-fan-card.is-back-2, .home-fan:focus-visible .home-fan-card.is-back-2 { transform: translateX(-50%) translateX(34%) rotate(8deg) scale(.92); }
+/* 一覧の中 (#grid) では、本体の見出しの「触れると表紙の器を浮かせて影の枠を付け、絵の transform を消し、動きの速さを替える」
+   規則 (styles.css の .card:hover .cover img、bunko-ui.css の .grid:not(.is-list) .card:hover .cover) が扇を崩していた。
+   id の強さで書き直す (器は浮かせず枠も出さない。絵の位置と傾きと動きは上の扇のまま) */
+#grid .card.home-fan:hover .cover, #grid .card.home-fan:focus-visible .cover { transform: none; box-shadow: none; }
+#grid .home-fan .cover img.home-fan-card {
+  position: absolute; left: 50%; bottom: 3%; height: 90%; width: auto; max-width: none; aspect-ratio: .72;
+  object-fit: cover; object-position: 50% 20%; filter: none; will-change: auto;
+  transition: transform 480ms cubic-bezier(.16, 1, .3, 1), filter 220ms cubic-bezier(.2, .8, .2, 1);
+}
+#grid .home-fan:hover .cover img.home-fan-card, #grid .home-fan:focus-visible .cover img.home-fan-card { filter: brightness(1.06); }
+#grid .home-fan .cover img.home-fan-card.is-front { transform: translateX(-50%); }
+#grid .home-fan .cover img.home-fan-card.is-back-1 { transform: translateX(-50%) translateX(-24%) rotate(-5deg) scale(.92); }
+#grid .home-fan .cover img.home-fan-card.is-back-2 { transform: translateX(-50%) translateX(24%) rotate(5deg) scale(.92); }
+#grid .home-fan:hover .cover img.home-fan-card.is-front, #grid .home-fan:focus-visible .cover img.home-fan-card.is-front { transform: translateX(-50%) translateY(-3%); }
+#grid .home-fan:hover .cover img.home-fan-card.is-back-1, #grid .home-fan:focus-visible .cover img.home-fan-card.is-back-1 { transform: translateX(-50%) translateX(-34%) rotate(-8deg) scale(.92); }
+#grid .home-fan:hover .cover img.home-fan-card.is-back-2, #grid .home-fan:focus-visible .cover img.home-fan-card.is-back-2 { transform: translateX(-50%) translateX(34%) rotate(8deg) scale(.92); }
+/* 選んでいる・焦点の印は正面の一枚に */
+.card.home-fan.is-current .cover, .card.home-fan:focus-visible .cover { outline: none; }
+.card.home-fan.is-current .home-fan-card.is-front { outline: 2px solid var(--select); outline-offset: 3px; }
+.card.home-fan:focus-visible .home-fan-card.is-front { outline: 2px solid var(--select); outline-offset: 3px; }
+/* 一覧のリスト表示では後ろの二枚を出さない (上の #grid の書き直しより後に、同じ強さで) */
+#grid.is-list .home-fan .cover img.home-fan-card.is-back-1, #grid.is-list .home-fan .cover img.home-fan-card.is-back-2 { display: none; }
+#grid.is-list .home-fan .cover img.home-fan-card, #grid.is-list .home-fan .cover img.home-fan-card.is-front {
+  position: static; transform: none; width: 100%; height: 100%; aspect-ratio: auto; border: 0; box-shadow: none; border-radius: inherit;
+}
+/* 見出しの字: 名 (明朝、一行)・作者名・数 */
+.grid:not(.is-list) .home-fan .card-body { height: 56px; justify-content: flex-start; gap: 2px; align-items: center; text-align: center; }
+.grid:not(.is-list) .home-fan .card-title {
+  font: 600 14px/1.35 var(--mincho); max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block;
+}
+.grid:not(.is-list) .home-fan .card-heading { width: 100%; min-width: 0; justify-content: center; }
+.home-fan-meta {
+  display: flex; justify-content: center; align-items: baseline; gap: 5px; margin: 0; max-width: 100%;
+  font: 11.5px/1.5 var(--font); color: var(--dust); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+}
+.home-fan .home-author-line { max-width: 100%; }
+/* リスト表示では字を左に揃える (扇は一枚の表紙に畳む) */
+.grid.is-list .home-fan .card-body, .grid.is-list .home-fan .card-heading { text-align: left; justify-content: flex-start; align-items: flex-start; }
+.grid.is-list .home-fan-meta { justify-content: flex-start; }
+.home-fan-dot { color: var(--dust); }
+.home-fan-new { color: var(--home-accent); font-weight: 700; }
+/* 作品の検索の間の「当たった冊数 / 所持」 */
+.home-fan-count.is-matched { color: var(--select); font-weight: 700; }
+.home-fan-rating { color: var(--mark, #fcbf49); }
+body[data-ui-theme=light] .home-fan-rating { color: var(--count); }
+
+/* つながっているサイトのアイコン。扇では正面の表紙の下の真ん中に重ねる (高さは取らない)。アイコンは透かさない */
+.home-sites {
+  position: absolute; left: 4px; bottom: 4px; z-index: 4;
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 999px;
+  background: rgba(0, 0, 0, .6); pointer-events: none;
+}
+.home-fan .home-sites { left: 50%; bottom: calc(7% + 8px); transform: translateX(-50%); }
+.grid.is-list .home-fan .home-sites { left: 4px; bottom: 4px; transform: none; }
+.home-sites:empty { display: none; }
+.home-sites.is-inline { position: static; pointer-events: auto; }
+.home-site { display: inline-grid; place-items: center; width: 12px; height: 12px; flex: none; }
+.home-site img { width: 12px; height: 12px; object-fit: contain; border-radius: 2px; display: block; }
+.home-site svg { width: 12px; height: 12px; display: block; }
+/* 題の下の作者名 (サークル名を先に立てた時だけ)。一行に保つ */
+.home-author-line { margin: 2px 0 0; }
+.home-author-line .card-artist {
+  display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dust); font-size: 11px;
+}
+
+/* ---- 最近の動きの帯 (一覧の上)。一頁目の返りと同じ一巡で出す。溢れた分は横に巻く (端に寄せると一面ぶん送る) ---- */
+.home-strip { margin: 2px 0 24px; }
+.home-strip[hidden], body[data-home-author] .home-strip { display: none; }
+.home-strip-kick {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px;
+  font: 600 15px/1.3 var(--mincho); color: var(--paper); letter-spacing: .03em;
+}
+.home-strip-kick small { font: 400 12px var(--font); color: var(--dust); letter-spacing: 0; }
+.home-strip-shelf { position: relative; }
+.home-strip-clip { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; padding: 4px 0 6px; }
+.home-strip-clip::-webkit-scrollbar { display: none; }
+/* 暈しは巻ける向きにだけ (右に続きがあれば右、巻いた後は左も) */
+.home-strip.is-over:not(.at-end) .home-strip-clip { mask-image: linear-gradient(to right, #000 calc(100% - 120px), transparent); }
+.home-strip.is-over:not(.at-start):not(.at-end) .home-strip-clip { mask-image: linear-gradient(to right, transparent, #000 80px, #000 calc(100% - 120px), transparent); }
+.home-strip.is-over.at-end:not(.at-start) .home-strip-clip { mask-image: linear-gradient(to right, transparent, #000 80px); }
+.home-strip-row { display: flex; gap: 18px; width: max-content; padding: 0 2px; }
+.home-strip-item {
+  width: 92px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 0; border: 0; background: none; color: var(--paper); cursor: pointer; text-align: center; font: inherit;
+}
+.home-strip-face {
+  position: relative; width: 72px; height: 72px; border-radius: 50%; background: var(--shelf); flex: none;
+  transition: transform 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.home-strip-face img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 18%; display: block; }
+.home-strip-item:hover .home-strip-face { transform: translateY(-3px); }
+.home-strip-face img { transition: filter 220ms cubic-bezier(.2, .8, .2, 1); }
+.home-strip-item:hover .home-strip-face img { filter: brightness(1.06); }
+.home-strip-item:focus-visible { outline: none; }
+.home-strip-item:focus-visible .home-strip-face { outline: 2px solid var(--select); outline-offset: 3px; }
+.home-strip-new {
+  position: absolute; right: -4px; bottom: -2px; padding: 1px 7px; border-radius: 999px;
+  background: var(--home-accent); color: var(--night); border: 2px solid var(--night); font: 700 11px/1.35 var(--font);
+}
+.home-strip-name {
+  font: 600 12px/1.35 var(--mincho); max-width: 100%;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.home-strip-sub { font-size: 11px; color: var(--dust); margin-top: -4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- 作者頁 ---- */
+.home-author-view { padding: 6px 0 48px; }
+.home-author-view[hidden] { display: none; }
+/* 頭: 扇・名・数の札・サイトの釦・年 / 月。数の札は一行に保つ (網の作品が届いて札が増えても頭の高さが動かない) */
+.home-av-head { display: flex; align-items: center; gap: 26px; margin: 4px 0 28px; min-height: 132px; }
+.home-av-fan { position: relative; width: 168px; aspect-ratio: 1.3; flex: none; }
+.home-av-title { min-width: 0; flex: 1 1 auto; }
+.home-av-title h2 { margin: 0; font: 600 28px/1.25 var(--mincho); letter-spacing: .02em; color: var(--paper); overflow-wrap: anywhere; }
+.home-av-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--dust); }
+.home-av-pills { margin: 12px 0 0; display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; min-height: 25px; }
+.home-av-pill {
+  flex: none; padding: 3px 10px; border: 0; border-radius: 999px; background: var(--cabinet);
+  font: 12px/1.5 var(--font); color: color-mix(in srgb, var(--paper) 80%, transparent); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.home-av-pill.is-rating { color: var(--mark, #fcbf49); }
+body[data-ui-theme=light] .home-av-pill.is-rating { color: var(--count); }
+.home-av-pill.is-new {
+  background: color-mix(in srgb, var(--home-accent) 16%, transparent); color: var(--home-accent); font-weight: 700; cursor: pointer;
+  transition: background-color 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.home-av-pill.is-new:hover { background: color-mix(in srgb, var(--home-accent) 26%, transparent); }
+.home-av-pill.is-new:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+/* 作品の検索の絞り (押すと外してすべての本)。数の札の並びの頭に置く (頭の高さは変えない) */
+.home-av-pill.is-filter {
+  max-width: 22em; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  background: color-mix(in srgb, var(--select) 16%, transparent); color: var(--select); font-weight: 700;
+  transition: background-color 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.home-av-pill.is-filter span { margin-left: 4px; opacity: .8; }
+.home-av-pill.is-filter:hover { background: color-mix(in srgb, var(--select) 26%, transparent); }
+.home-av-pill.is-filter:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+/* 一行に保つ (読み込み中の字が出入りしても頭の高さが動かない) */
+.home-av-line {
+  margin: 8px 0 0; display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--dust);
+  white-space: nowrap; min-height: 24px; overflow: hidden;
+}
+.home-av-status { min-width: 12em; color: var(--dust); overflow: hidden; text-overflow: ellipsis; }
+/* 頭のサイトの釦: 押すとそのサイトの本を出す / 出さない。切ったサイトはアイコンを薄く */
+.home-av-sites { display: inline-flex; align-items: center; gap: 2px; margin-left: -4px; }
+.home-origin-toggle {
+  display: inline-grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  background: none; cursor: pointer; transition: opacity var(--t-fast, 120ms), filter var(--t-fast, 120ms), background var(--t-fast, 120ms);
+}
+.home-origin-toggle:hover { background: color-mix(in srgb, var(--paper) 8%, transparent); }
+.home-origin-toggle img, .home-origin-toggle svg { width: 16px; height: 16px; display: block; border-radius: 3px; }
+.home-origin-toggle.is-off img, .home-origin-toggle.is-off svg { opacity: .28; filter: grayscale(1); }
+.home-origin-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+/* 年 / 月の切り替えは「年ごと」の見出しのすぐ横に */
+.home-av-mode { margin-left: 6px; flex: none; align-self: center; font-family: var(--font); }
+.home-av-mode button { min-width: 34px; cursor: pointer; }
+.home-av-empty { margin: 0; color: var(--dust); font-size: 12px; }
+
+/* 節の見出し (★の高い本・年ごと) */
+.home-av-kick {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px;
+  font: 600 16px/1.3 var(--mincho); color: var(--paper); letter-spacing: .03em;
+}
+.home-av-kick small { font: 400 12px var(--font); color: var(--dust); letter-spacing: 0; }
+/* 年 / 月の釦が並ぶ見出しは真ん中で揃える (字の下端で揃えると釦の分だけ上下にずれた) */
+.home-av-years > .home-av-kick { align-items: center; }
+.home-av-years > .home-av-kick .home-av-mode button { line-height: 1.2; }
+/* ★の高い本: 年ごとと同じ大きさの札で並べる (一冊目を大きくするのはやめた。数字は付けない) */
+.home-av-stars { margin-bottom: 22px; }
+/* ★の高い本: 表紙に題を重ねた札。五冊以上なら一冊目を二段二列に。札の大きさは三回目の直しのまま (幅 170px〜・段 136px)、
+   四回目の直しで冊数を 12 冊まで増やし、頁の幅いっぱいに並べる */
+.home-av-bento { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); grid-auto-rows: 136px; gap: 12px; }
+.home-av-bento.is-five > .home-bento-cell:first-child { grid-column: span 2; grid-row: span 2; }
+.home-av-bento:not(.is-five) { grid-template-columns: repeat(auto-fill, minmax(150px, 190px)); grid-auto-rows: 170px; }
+.home-bento-cell {
+  position: relative; display: block; min-height: 0; padding: 0; border: 0; border-radius: 12px; overflow: hidden;
+  background: var(--shelf); cursor: pointer; transition: transform 220ms cubic-bezier(.2, .8, .2, 1), box-shadow 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.home-bento-cell:hover, .home-bento-cell:focus-visible { transform: translateY(-2px); box-shadow: var(--home-fan-shadow); outline: none; }
+.home-bento-cell .cover { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; border-radius: 0; background: var(--shelf); }
+.home-bento-cell .cover img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; }
+.home-bento-cell::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, .1) 55%, transparent 72%);
+}
+.home-bento-cell.is-current .cover, .home-bento-cell:focus-visible .cover { outline: none; }
+.home-bento-cell.is-current { box-shadow: 0 0 0 2px var(--select); }
+/* 題の行の右に★、右上に頁数 (本の見出しと同じ印) */
+.home-bento-cell .page-count-badge { z-index: 2; }
+.home-bento-cap { position: absolute; z-index: 2; left: 12px; right: 10px; bottom: 10px; display: flex; align-items: flex-end; gap: 8px; color: #fff; }
+.home-bento-star { flex: none; color: var(--mark, #fcbf49); font: 700 11px/1.5 var(--font); }
+.home-bento-title {
+  flex: 1 1 auto; min-width: 0; margin: 0; font: 600 14px/1.3 var(--mincho); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.home-bento-title .home-origin { vertical-align: -1px; }
+.home-av-bento.is-five > .home-bento-cell:first-child .home-bento-title {
+  font-size: 19px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+@media (max-width: 760px) {
+  .home-av-bento.is-five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-av-bento.is-five > .home-bento-cell:first-child { grid-column: span 2; grid-row: span 1; }
+}
+
+/* 年ごと (縦の年表の軸はやめた。2026-09-27) */
+.home-av-group { position: relative; padding-bottom: 30px; }
+.home-av-label {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 0 0 14px;
+  font-size: 12px; font-weight: 500; color: var(--dust);
+}
+.home-av-y { font: 600 18px/1.2 var(--mincho); color: var(--paper); letter-spacing: .04em; }
+/* 即売会の札 (C104 夏) */
+.home-av-ev {
+  display: inline-flex; gap: 4px; align-items: baseline; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--stamp) 55%, transparent); font-size: 11px; color: var(--dust);
+}
+.home-av-ev b { font-family: var(--mono); color: var(--paper); font-weight: 600; }
+/* 新作のある年の「新 N」と、新作の本の「新」(朱) */
+.home-av-fresh { padding: 1px 8px; border-radius: 999px; background: var(--stamp); color: #fff; font: 700 11px/1.5 var(--font); }
+.home-new-stamp {
+  position: absolute; left: 6px; top: 6px; z-index: 3; padding: 2px 7px; border-radius: 999px;
+  background: var(--stamp); color: #fff; font: 700 11px/1.15 var(--font); letter-spacing: .04em; pointer-events: none;
+}
+.home-book.is-candidate .home-new-stamp { left: 28px; }
+/* 頭の「新作 +N」から送った本の縁を一度だけ光らせる (不透明度だけ) */
+.home-book .cover::before {
+  content: ''; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--stamp); opacity: 0;
+}
+.home-book.is-ping .cover::before { animation: home-ping 1400ms cubic-bezier(.2, .8, .2, 1); }
+@keyframes home-ping { 0%, 100% { opacity: 0; } 18%, 60% { opacity: 1; } }
+
+/* 作者頁を開く時に、押した所から頭の扇へ飛ぶ影武者 */
+.home-fly {
+  position: fixed; z-index: 90; margin: 0; pointer-events: none; transform-origin: 0 0;
+  object-fit: cover; object-position: 50% 20%; box-shadow: var(--home-fan-shadow); border: 3px solid var(--home-frame); box-sizing: border-box;
+  border-radius: 9px; will-change: transform;
+}
+/* 丸い顔から飛ぶ時も角は動かさない (角の丸みの動きは合成で描けず、重い時に駒が落ちる)。少し丸めの札で */
+.home-fly.is-round { border-radius: 22px; }
+@media (prefers-reduced-motion: reduce) {
+  .home-fan-card, .home-strip-row, .home-strip-face { transition: none; }
+  .home-book.is-ping .cover::before { animation: none; }
+}
+
+/* 本の見出し: 題の頭に出どころのサイトの印 (持ち込みは ?) */
+.home-origin {
+  display: inline-grid; place-items: center; width: 12px; height: 12px; margin-right: 4px;
+  vertical-align: -1px; flex: none;
+}
+.home-origin img, .home-origin svg { width: 12px; height: 12px; display: block; border-radius: 2px; }
+.home-av-cards .card { position: relative; }
+/* 作者頁では札ごとに作者名を繰り返さない (どの本も同じ人) */
+.home-av-cards .card-meta { display: none; }
+/* 名前が一致しただけの候補の本: 表紙の左上に白い丸の ?。済 の印はその右へ寄せる */
+.home-book-q {
+  position: absolute; left: 6px; top: 6px; z-index: 3; width: 16px; height: 16px;
+  display: grid; place-items: center; pointer-events: none;
+}
+.home-book-q svg { width: 16px; height: 16px; display: block; }
+.home-book.is-candidate .owned-mark { left: 28px; }
+/* 表紙の左下の印: 役 (見本・告知・差分・再掲。点だけで決めた物は ? と薄く) と、畳んだ物 (全て表示の時に見える)。
+   右上の頁数の印と同じ帯の形。表紙に重ねるだけで高さは取らない */
+.home-marks {
+  position: absolute; left: 4px; bottom: 4px; z-index: 3; display: inline-flex; gap: 3px;
+  pointer-events: auto; max-width: calc(100% - 8px); overflow: hidden;
+}
+.home-mark {
+  padding: 2px 6px; border-radius: 999px; font: 600 10.5px/1.15 var(--font); letter-spacing: .02em;
+  background: rgba(0, 0, 0, .6); color: #fff; white-space: nowrap;
+}
+.home-mark.is-guess { color: rgba(255, 255, 255, .78); }
+.home-mark.is-fold { background: rgba(127, 216, 220, .88); color: #10262a; }
+
+/* ---- 詳細の板: 名前 (鉛筆で変える) ---- */
+/* 名前は板の真ん中に (顔・種別の行・釦と揃える)。鉛筆は右の列に添えるだけで、左右に同じ幅の列を置いて
+   名前の中央をずらさない。名前を打つ欄は三つの列をまたぐ */
+.home-name { display: grid; grid-template-columns: minmax(24px, 1fr) auto minmax(24px, 1fr); align-items: center; column-gap: 6px; }
+.home-name-text { grid-column: 2; min-width: 0; text-align: center; }
+.home-rename {
+  grid-column: 3; justify-self: start;
+  display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; flex: none;
+  background: none; color: var(--dust); cursor: pointer; opacity: .7;
+}
+.home-rename:hover { opacity: 1; color: var(--paper); background: color-mix(in srgb, var(--paper) 8%, transparent); }
+.home-rename svg { width: 14px; height: 14px; display: block; }
+.home-rename-reset {
+  display: inline-block; margin: 0 0 6px; padding: 1px 8px; border: 1px solid var(--rule); border-radius: 999px;
+  background: none; color: var(--dust); font-size: 11px; cursor: pointer;
+}
+.home-rename-reset:hover { color: var(--paper); border-color: var(--dust); }
+.home-name-edit { grid-column: 1 / -1; display: flex; gap: 6px; width: 100%; }
+.home-name-input {
+  flex: 1; min-width: 0; padding: 4px 8px; border-radius: 6px; font: inherit; font-size: 16px;
+  background: var(--shelf); border: 1px solid var(--rule); color: var(--paper);
+}
+.home-name-input:focus { outline: none; border-color: var(--ink); }
+
+/* ---- 詳細の板: 顔 (押すと表紙を選ぶ板) ---- */
+.home-face img { object-fit: cover; }
+.home-face.is-pickable { cursor: pointer; }
+/* 指を載せた時だけ出る札 (表紙の下の真ん中に重ねる。高さは取らない) */
+.home-face-pick {
+  position: absolute; left: 50%; bottom: 10px; z-index: 2; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 9px; border: 0; border-radius: 999px;
+  background: rgba(0, 0, 0, .62); color: #fff; font: 600 12px/1.2 var(--font); white-space: nowrap; cursor: pointer;
+  opacity: 0; transition: opacity var(--t-fast, 120ms);
+}
+.home-face-pick svg { width: 14px; height: 14px; display: block; }
+.home-face.is-pickable:not(.is-picking):hover .home-face-pick, .home-face:not(.is-picking) .home-face-pick:focus-visible { opacity: 1; }
+/* 選んでいる間: 顔は試しの表紙を出すだけ (高さは留めてあるので、縦横の違う表紙は収めて見せる) */
+.home-face.is-picking .home-face-pick { pointer-events: none; }
+.home-face.is-picking > img { height: 100%; object-fit: contain; }
+
+/* 表紙を選ぶ板: 顔の下から詳細の見えている下端までに重ねる (置き場は home.js が測る)。詳細の行は押しのけない */
+.home-cover-pick {
+  position: absolute; left: 12px; right: 12px; z-index: 5; display: flex; flex-direction: column; min-height: 0;
+  background: var(--cabinet, #16191e); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--panel-shadow, 0 14px 34px #0007);
+  text-align: left; animation: home-pick-in 140ms ease-out;
+}
+@keyframes home-pick-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* 板の下に隠れた行は、板の縁の隙間から覗かせない (見えなくするだけで、位置は動かさない) */
+#detail-body:has(> .home-cover-pick) > :not(.home-face):not(.home-cover-pick) { visibility: hidden; }
+.home-cover-pick-head { display: flex; align-items: center; gap: 10px; padding: 10px 8px 8px 14px; flex: none; }
+.home-cover-pick-title { font: 600 13px/1.3 var(--font); color: var(--paper); }
+.home-cover-pick-count { font-size: 11.5px; color: var(--dust); }
+.home-cover-pick-close {
+  margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
+  background: none; color: var(--dust); cursor: pointer;
+}
+.home-cover-pick-close:hover { color: var(--paper); background: color-mix(in srgb, var(--paper) 8%, transparent); }
+.home-cover-pick-close svg { width: 16px; height: 16px; display: block; }
+.home-cover-grid {
+  position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); align-content: start; gap: 8px; padding: 2px 12px 14px;
+  /* 段は表紙の高さのまま (板の高さに合わせて縮めると、表紙が重なる) */
+  grid-auto-rows: max-content;
+}
+.home-cover-tile {
+  position: relative; display: block; width: 100%; aspect-ratio: 5 / 7; padding: 0; border: 0; border-radius: 6px; overflow: hidden;
+  background: var(--shelf); cursor: pointer;
+}
+.home-cover-tile img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; transition: filter var(--t-fast, 120ms); }
+/* 縁は絵の上に重ねる (並びの送りの端で切れないよう内側に) */
+.home-cover-tile::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px #ffffff14; transition: box-shadow var(--t-fast, 120ms);
+}
+.home-cover-tile:hover img { filter: brightness(1.08); }
+.home-cover-tile:hover::after { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--paper) 55%, transparent); }
+.home-cover-tile.is-current::after { box-shadow: inset 0 0 0 3px var(--home-accent, #7fd8dc); }
+.home-cover-tile:focus-visible { outline: none; }
+.home-cover-tile:focus-visible::after { box-shadow: inset 0 0 0 3px var(--ink); }
+.home-cover-tag {
+  position: absolute; left: 4px; bottom: 4px; padding: 2px 7px; border-radius: 999px;
+  font: 600 10.5px/1.15 var(--font); letter-spacing: .02em; background: rgba(0, 0, 0, .62); color: #fff; pointer-events: none;
+}
+.home-cover-pick.is-busy .home-cover-grid { pointer-events: none; opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .home-cover-pick { animation: none; } }
+
+/* ---- 詳細の板: サイトの URL ---- */
+.home-links .row-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.home-link { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.home-url {
+  border: 0; background: none; padding: 0; margin: 0; cursor: pointer; text-align: left;
+  color: var(--ink); font: 12px/1.5 var(--font); word-break: break-all;
+}
+.home-url:hover { text-decoration: underline; }
+.home-url.is-candidate { color: var(--home-candidate, var(--nail)); }
+.home-url-none { font-size: 12px; color: var(--dust); }
+/* 結びの印 (鎖): 結び済みは水色、候補 (名前が一致しただけ・突き合わせの答え) は点線の琥珀。
+   本体の --nail は暗い見た目では白に近いので、候補の色は Home で持つ */
+.home-links, .home-author-view { --home-candidate: #e9b36a; }
+body[data-ui-theme=light] .home-links, body[data-ui-theme=light] .home-author-view { --home-candidate: #9a6a1f; }
+.home-chain { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--home-accent, #7fd8dc); }
+.home-chain svg { width: 14px; height: 14px; display: block; }
+.home-chain.is-candidate { color: var(--home-candidate); }
+.home-chain.is-candidate svg path { stroke-dasharray: 3 2.2; }
+/* サークルと作者の名前。作者は押すとその作者の頁へ */
+.home-people { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.home-person { font-size: 12px; color: var(--paper); overflow-wrap: anywhere; }
+.home-person.is-minor { color: var(--dust); }
+.home-person.is-candidate { color: var(--home-candidate, var(--nail)); }
+.home-person.is-link {
+  border: 0; background: none; padding: 0; margin: 0; cursor: pointer; text-align: left; font: inherit; font-size: 12px;
+  color: var(--ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ink) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.home-person.is-link:hover { text-decoration-color: currentColor; }
+/* 作者の★ (1〜5) */
+.home-stars { display: inline-flex; gap: 2px; }
+.home-star {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; background: none;
+  color: var(--dust); cursor: pointer; border-radius: 4px;
+}
+.home-star svg { width: 16px; height: 16px; display: block; }
+.home-star.is-on { color: var(--mark, #f2c14e); }
+.home-star:hover:not(:disabled) { color: var(--mark, #f2c14e); }
+.home-stars.is-readonly .home-star { cursor: default; }
+.home-url-edit { display: flex; gap: 6px; width: 100%; }
+.home-url-input {
+  flex: 1; min-width: 0; padding: 4px 8px; border-radius: 6px; font-size: 12px;
+  background: var(--shelf); border: 1px solid var(--rule); color: var(--paper);
+}
+.home-url-input:focus { outline: none; border-color: var(--ink); }
+/* 結びの釦は鎖の絵だけ (結ぶ = 鎖、違う・外す = 切れた鎖)。言葉は title */
+.home-link-act {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule); background: none; color: var(--dust); flex: none;
+}
+.home-link-act svg { width: 14px; height: 14px; display: block; }
+.home-link-act:hover { color: var(--paper); border-color: var(--dust); }
+.home-link-act.is-save:hover, .home-link-act.is-accept:hover { color: var(--home-accent, #7fd8dc); border-color: color-mix(in srgb, var(--home-accent, #7fd8dc) 60%, transparent); }
+.home-link-act.is-reject:hover, .home-link-act.is-unlink:hover { color: var(--stamp); border-color: color-mix(in srgb, var(--stamp) 60%, transparent); }
+.home-link-act:disabled { opacity: .5; cursor: default; }
+/* もう一つ結ぶ (押すと URL の欄に変わる) */
+.home-link-add {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--rule); background: none; color: var(--dust); font-size: 14px; line-height: 1; flex: none;
+}
+.home-link-add:hover { color: var(--paper); border-color: var(--dust); }
+/* 持ち込みの本の出どころ (分からない / Discord) */
+.home-origin-pick { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.home-origin-choice {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule); background: none; color: var(--dust); font-size: 12px;
+}
+.home-origin-choice img, .home-origin-choice svg { width: 14px; height: 14px; display: block; border-radius: 3px; }
+.home-origin-choice.is-on { color: var(--paper); border-color: var(--home-accent, #7fd8dc); }
+.home-origin-choice:disabled { cursor: default; opacity: .6; }
+.home-url-error { width: 100%; font-size: 11px; color: var(--stamp); }
+/* 最近の本の題の頭の印 */
+.pixiv-related-item .home-origin { vertical-align: -1px; }

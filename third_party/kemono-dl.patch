@@ -1,0 +1,352 @@
+diff --git a/kemono-dl.py b/kemono-dl.py
+index 091a629..e33b8c3 100644
+--- a/kemono-dl.py
++++ b/kemono-dl.py
+@@ -1,3 +1,9 @@
++# 同梱の埋め込み Python (python313._pth 構成) はスクリプト自身のディレクトリを
++# sys.path に足さないので、ここで自分の場所を通す。どこに置かれても import src が効く
++import os
++import sys
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++
+ from src.main import main
+ 
+ if __name__ == '__main__':
+diff --git a/src/args.py b/src/args.py
+index aad61e8..60531a7 100644
+--- a/src/args.py
++++ b/src/args.py
+@@ -129,6 +129,18 @@ def get_args():
+                     metavar="FILE", type=str, default=None,
+                     help="Only download posts that are not recorded in the archive file.")
+ 
++    ap.add_argument("--state-db",
++                    metavar="FILE", type=str, default=None,
++                    help="Store completed post state in SQLite. Takes precedence over --archive.")
++
++    ap.add_argument("--site-url",
++                    metavar="URL", type=str, default="https://pawchive.st",
++                    help="Pawchive website/API base URL.")
++
++    ap.add_argument("--file-url",
++                    metavar="URL", type=str, default="https://file.pawchive.pw",
++                    help="Pawchive media file base URL.")
++
+     ap.add_argument("--date",
+                     metavar="YYYYMMDD", type=str, default=None,
+                     help="Only download posts published from this date.")
+@@ -307,7 +319,7 @@ def get_args():
+         # make sure cookies are wildcard for better compatibility
+         for cookie in loaded_cookies:
+             args['cookie_domains']['kemono'] = args['cookie_domains']['kemono'] or (
+-                match := re.search(r'^(?:www)?\.?(kemono\.(?:party|su|cr|st))$', cookie.domain)) and match.group(1)
++                match := re.search(r'^(?:www)?\.?(kemono\.(?:party|su|cr|st)|pawchive\.[a-z0-9.-]+)$', cookie.domain)) and match.group(1)
+             args['cookie_domains']['coomer'] = args['cookie_domains']['coomer'] or (
+                 match := re.search(r'^(?:www)?\.?(coomer\.(?:party|su|cr|st))$', cookie.domain)) and match.group(1)
+             
+@@ -345,6 +357,10 @@ def get_args():
+         if not os.path.isdir(os.path.dirname(os.path.abspath(args['archive']))):
+             print(f"--archive {args['archive']} directory does not exist"), quit()
+ 
++    if args['state_db']:
++        if not os.path.isdir(os.path.dirname(os.path.abspath(args['state_db']))):
++            print(f"--state-db {args['state_db']} directory does not exist"), quit()
++
+     if args['only_filetypes'] and args['skip_filetypes']:
+         print('--only-filetypes and --skip-filetypes can not be given together'), quit()
+     # takes a comma seperated string of extentions and converts them to a list
+diff --git a/src/helper.py b/src/helper.py
+index 480f4e2..5f5ef90 100644
+--- a/src/helper.py
++++ b/src/helper.py
+@@ -12,7 +12,7 @@ running_args = get_args()
+ 
+ def parse_url(url):
+     # parse urls
+-    downloadable = re.search(r'^https://((?:kemono|coomer)\.(?:party|su|cr|st))/([^/]+)/user/([^/]+)($|/post/([^/]+))($|/revision/([^/]+)$)',url)
++    downloadable = re.search(r'^https://((?:(?:kemono|coomer)\.(?:party|su|cr|st)|pawchive\.[a-z0-9.-]+))/([^/]+)/user/([^/]+)($|/post/([^/]+))($|/revision/([^/]+)$)',url)
+     if not downloadable:
+         return None
+     return downloadable.group(1)
+diff --git a/src/main.py b/src/main.py
+index 2d33de6..fbf24f5 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -7,12 +7,19 @@ import warnings
+ warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
+ import time
+ import datetime
+-from PIL import Image
+ from io import BytesIO
+ import json
+ from numbers import Number
+ import pathlib
+ import itertools
++import sqlite3
++from urllib.parse import urlparse
++from contextlib import contextmanager
++
++if os.name == 'nt':
++    import msvcrt
++else:
++    import fcntl
+ 
+ from .args import get_args
+ from .logger import logger
+@@ -20,16 +27,43 @@ from .version import __version__
+ from .helper import get_file_hash, print_download_bar, check_date, parse_url, compile_post_path, compile_file_path, RefererSession
+ # from .my_yt_dlp import my_yt_dlp
+ 
++
++@contextmanager
++def archive_lock(archive_path):
++    """Serialize archive reads/writes across parallel downloader processes."""
++    lock_path = f"{archive_path}.lock"
++    with open(lock_path, 'a+b') as lock_file:
++        lock_file.seek(0, os.SEEK_END)
++        if lock_file.tell() == 0:
++            lock_file.write(b'0')
++            lock_file.flush()
++        lock_file.seek(0)
++        if os.name == 'nt':
++            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
++        else:
++            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
++        try:
++            yield
++        finally:
++            lock_file.seek(0)
++            if os.name == 'nt':
++                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
++            else:
++                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
++
+ class downloader:
+ 
+     def __init__(self, args):
++        self.site_url = args['site_url'].rstrip('/')
++        self.file_url = args['file_url'].rstrip('/')
++        self.site_domain = urlparse(self.site_url).netloc
+         self.input_urls = args['links'] + args['from_file']
+         if args['replace_tld']:
+             for n,i in enumerate(self.input_urls):
+-                i = re.sub("kemono.(party|su)","kemono.cr",i)
++                i = re.sub("kemono\\.(party|su|cr)", self.site_domain, i)
+                 i = re.sub("coomer.(party|su)","coomer.st",i)
+                 self.input_urls[n] = i
+-        self.re_tld = re.compile(".(party|su|cr|st)")
++        self.re_tld = re.compile(r"\.(?:party|su|cr|st|pw)")
+         # list of completed posts from current session
+         self.comp_posts = []
+         # list of creators info
+@@ -45,7 +79,7 @@ class downloader:
+ 
+         for i in ('/v1','/v0'):
+             self.api_ver = i
+-            if requests.get(f'https://kemono.cr/api{self.api_ver}/app_version', headers=self.headers).status_code == 200:
++            if requests.get(f'{self.site_url}/api{self.api_ver}/app_version', headers=self.headers).status_code == 200:
+                 break
+ 
+         # file/folder naming
+@@ -71,6 +105,7 @@ class downloader:
+         self.restrict_ascii = args['restrict_names']
+ 
+         self.archive_file = args['archive']
++        self.state_db = args['state_db']
+         self.archive_list = []
+         self.post_errors = 0
+ 
+@@ -194,7 +229,7 @@ class downloader:
+                 self.get_post(f"https://{domain}/{favorite['service']}/user/{favorite['id']}", retry=self.retry)
+ 
+     def get_post(self, url:str, retry:int, chunk=0, first=True):
+-        found = re.search(r'(https://((?:kemono|coomer)\.(?:party|su|cr|st))/)(([^/]+)/user/([^/]+)($|/post/[^/]+)($|/revision/[^/]+))', url)
++        found = re.search(r'(https://((?:(?:kemono|coomer)\.(?:party|su|cr|st)|pawchive\.[a-z0-9.-]+))/)(([^/]+)/user/([^/]+)($|/post/[^/]+)($|/revision/[^/]+))', url)
+         if not found:
+             logger.error(f"Unable to find url parameters for {url}")
+             return
+@@ -309,6 +344,7 @@ class downloader:
+ 
+ 
+     def download_icon_banner(self, post:dict, img_types:list, retry:int):
++        from PIL import Image
+         for img_type in img_types:
+             if post['post_variables']['service'] in {'dlsite'}:
+                 logger.warning(f"Profile {img_type}s are not supported for {post['post_variables']['service']} users")
+@@ -458,7 +494,7 @@ class downloader:
+             file['file_variables'] = {
+                 'filename': filename,
+                 'ext': file_extension[1:],
+-                'url': f"https://{post['post_variables']['site']}/data{inline_image['src']}",
++                'url': f"{self.file_url}/data{inline_image['src']}" if post['post_variables']['site'].startswith('pawchive.') else f"https://{post['post_variables']['site']}/data{inline_image['src']}",
+                 'hash': file_hash,
+                 'index': f"{index + 1}".zfill(len(str(len(inline_images)))),
+                 'referer': f"https://{post['post_variables']['site']}/{post['post_variables']['service']}/user/{post['post_variables']['user_id']}/post/{post['post_variables']['id']}"
+@@ -561,7 +597,7 @@ class downloader:
+                 file['file_variables'] = {
+                     'filename': filename,
+                     'ext': file_extension[1:],
+-                    'url': f"https://{domain}/data{attachment['path']}",
++                    'url': f"{self.file_url}/data{attachment['path']}" if domain.startswith('pawchive.') else f"https://{domain}/data{attachment['path']}",
+                     'hash': file_hash,
+                     'index': f"{index + 1}".zfill(len(str(len(post['attachments'])))),
+                     'referer': f"https://{domain}/{post['service']}/user/{post['user']}/post/{post['id']}"
+@@ -714,7 +750,7 @@ class downloader:
+             dss_letter=isinstance(self.force_dss,str) and self.force_dss[0]
+             url_pre_redir=file['file_variables']['url']
+             url_redir=None
+-            if url_pre_redir.startswith('https://kemono') or url_pre_redir.startswith('https://coomer'):
++            if url_pre_redir.startswith('https://kemono') or url_pre_redir.startswith('https://coomer') or url_pre_redir.startswith('https://pawchive'):
+                 resp=self.session.get(url=url_pre_redir, stream=False, headers=dict(**self.headers,**request_headers), cookies=self.cookies, timeout=self.timeout, allow_redirects=False)
+                 if resp.status_code == 302:
+                     url_redir = resp.headers['Location']
+@@ -814,6 +850,8 @@ class downloader:
+                     downloaded = resume_size
+                     print_download_bar(total, downloaded, resume_size, start)
+                     iter_chunk_size = 256<<10
++                    # BUNKO: write every chunk as it arrives instead of buffering up to 32 MB in memory.
++                    # The host reads the .part size to show progress; a 32 MB buffer made it sit at 0 and jump per file.
+                     puff = bytes()
+                     for chunk in response.iter_content(chunk_size=iter_chunk_size):
+                         if first_chunk:
+@@ -821,15 +859,9 @@ class downloader:
+                             if self.headcheck:
+                                 if chunk[:len(head_ref)]!=head_ref:
+                                     raise Exception("Head Check Mismatch")
+-                        puff += chunk
+                         downloaded += len(chunk)
+-                        if len(puff) >= (32<<20)//iter_chunk_size*iter_chunk_size:
+-                            f.write(puff)
+-                            puff = bytes()
++                        f.write(chunk)
+                         print_download_bar(total, downloaded, resume_size, start)
+-                    if puff:
+-                        f.write(puff)
+-                        puff = bytes()
+                 print()
+             except Exception as exc:
+                 # assuming puffered content is good
+@@ -882,16 +914,55 @@ class downloader:
+ 
+     def load_archive(self):
+         # load archived posts
+-        if self.archive_file and os.path.exists(self.archive_file):
+-            with open(self.archive_file,'r') as f:
+-                self.archive_list = f.read().splitlines()
+-            self.archive_list = [self.re_tld.sub("",i) for i in self.archive_list]
+-            self.archive_list = set(self.archive_list) # "in" check has lower time complexity for sets
++        if self.state_db:
++            self.init_state_db()
++            return
++        if not self.archive_file:
++            return
++        with archive_lock(self.archive_file):
++            self._load_archive_unlocked()
++
++    def _load_archive_unlocked(self):
++        if os.path.exists(self.archive_file):
++            with open(self.archive_file, 'r', encoding='utf-8') as f:
++                archive_lines = f.read().splitlines()
++            self.archive_list = {self.re_tld.sub("", line) for line in archive_lines}
++            self.archive_mtime_ns = os.stat(self.archive_file).st_mtime_ns
++        else:
++            self.archive_list = set()
++            self.archive_mtime_ns = None
++
++    def refresh_archive(self):
++        if not self.archive_file or not os.path.exists(self.archive_file):
++            return
++        current_mtime_ns = os.stat(self.archive_file).st_mtime_ns
++        if current_mtime_ns == getattr(self, 'archive_mtime_ns', None):
++            return
++        with archive_lock(self.archive_file):
++            self._load_archive_unlocked()
+ 
+     def write_archive(self, post:dict):
+-        if self.archive_file and self.post_errors == 0 and not self.simulate:
+-            with open(self.archive_file,'a') as f:
+-                f.write("https://{site}/{service}/user/{user_id}/post/{id}".format(**post['post_variables']) + '\n')
++        if self.post_errors != 0 or self.simulate:
++            return
++        post_url = "https://{site}/{service}/user/{user_id}/post/{id}".format(**post['post_variables'])
++        if self.state_db:
++            normalized_url = self.post_state_key(post['post_variables'])
++            with self.state_connection() as connection:
++                connection.execute(
++                    "INSERT OR IGNORE INTO completed_posts(post_url, completed_at) VALUES (?, ?)",
++                    (normalized_url, datetime.datetime.now(datetime.timezone.utc).isoformat()),
++                )
++            self.archive_list.add(normalized_url)
++            return
++        if self.archive_file:
++            normalized_url = self.re_tld.sub("", post_url)
++            with archive_lock(self.archive_file):
++                self._load_archive_unlocked()
++                if normalized_url not in self.archive_list:
++                    with open(self.archive_file, 'a', encoding='utf-8') as f:
++                        f.write(post_url + '\n')
++                    self.archive_list.add(normalized_url)
++                    self.archive_mtime_ns = os.stat(self.archive_file).st_mtime_ns
+ 
+     def skip_user(self, user:dict):
+         # check last update date
+@@ -903,7 +974,15 @@ class downloader:
+ 
+     def skip_post(self, post:dict):
+         # check if the post should be downloaded
++        if self.state_db:
++            post_url = "https://{site}/{service}/user/{user_id}/post/{id}".format(**post['post_variables'])
++            normalized_url = self.post_state_key(post['post_variables'])
++            if normalized_url in self.archive_list:
++                logger.info(f"Skipping post {post['post_variables']['id']} | post already archived")
++                return True
++
+         if self.archive_file:
++            self.refresh_archive()
+             post_url = "https://{site}/{service}/user/{user_id}/post/{id}".format(**post['post_variables'])
+             if self.re_tld.sub("",post_url) in self.archive_list:
+                 logger.info(f"Skipping post {post['post_variables']['id']} | post already archived") # add some numbers to indicate that the script isn't frozen when a lot of posts skipped and your screen is full of this message
+@@ -940,6 +1019,43 @@ class downloader:
+         
+         return False
+ 
++    @staticmethod
++    def post_state_key(post_variables):
++        return "{service}:{user_id}:{id}".format(**post_variables)
++
++    @contextmanager
++    def state_connection(self):
++        connection = sqlite3.connect(self.state_db, timeout=30)
++        connection.execute("PRAGMA busy_timeout = 30000")
++        try:
++            yield connection
++            connection.commit()
++        finally:
++            connection.close()
++
++    def init_state_db(self):
++        with self.state_connection() as connection:
++            connection.execute("PRAGMA journal_mode = WAL")
++            connection.execute(
++                """
++                CREATE TABLE IF NOT EXISTS completed_posts (
++                    post_url TEXT PRIMARY KEY,
++                    completed_at TEXT NOT NULL
++                )
++                """
++            )
++            self.archive_list = {
++                row[0] for row in connection.execute("SELECT post_url FROM completed_posts")
++            }
++            connection.execute(
++                """
++                CREATE TABLE IF NOT EXISTS metadata (
++                    key TEXT PRIMARY KEY,
++                    value TEXT NOT NULL
++                )
++                """
++            )
++
+     def skip_file(self, file:dict, post:dict):
+         # check if file exists
+         if not self.overwrite:
